@@ -1,7 +1,7 @@
 //! Functionality related to hashing.
 use base64ct::{Base64, Encoding};
 use sha2::{Digest, Sha256};
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Result};
 
 use crate::backend::salt;
 
@@ -23,7 +23,7 @@ pub struct Hashed {
 }
 impl Hashed {
     /// Create a new base 64 [Hashed] using the given [HashFn].
-    pub fn hash_string(input: &str, hash_fn: HashFn) -> Result<Self, Error> {
+    pub fn hash_string(input: &str, hash_fn: HashFn) -> Result<Self> {
         if input.is_ascii() {
             let hash = Sha256::digest(input.as_bytes());
             let base64_hash = Base64::encode_string(&hash);
@@ -41,7 +41,7 @@ impl Hashed {
     }
 
     /// Create a new base 64 [Hashed] with a given [salt::Salt].
-    pub fn hash_salt_string(input: &str, hash_fn: HashFn, salt: salt::Salt) -> Result<Self, Error> {
+    pub fn hash_salt_string(input: &str, hash_fn: HashFn, salt: salt::Salt) -> Result<Self> {
         if input.is_ascii() {
             let hash = Sha256::new()
                 .chain_update(input.as_bytes())
