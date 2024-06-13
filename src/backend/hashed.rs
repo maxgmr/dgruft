@@ -88,17 +88,27 @@ impl Hashed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hex_literal::hex;
     use pretty_assertions::assert_eq;
 
     #[test]
     fn test_hash_sha256() {
-        let hash_1 = Hashed::hash_string("password", HashFn::Sha256);
-        let hash_2 = Hashed::hash_string("password", HashFn::Sha256);
-        assert_eq!(hash_1.unwrap().get_str(), hash_2.unwrap().get_str());
+        let hash_1 = Hashed::hash_string("password", HashFn::Sha256).unwrap();
+        let hash_2 = Hashed::hash_string("password", HashFn::Sha256).unwrap();
+        assert_eq!(hash_1.get_str(), hash_2.get_str());
+        assert_eq!(hash_1.get_bytes(), hash_2.get_bytes());
 
-        let blank_sha256 = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
+        let blank_sha256_b64 = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
         let hash_blank = Hashed::hash_string("", HashFn::Sha256).unwrap();
-        assert_eq!(hash_blank.get_str(), blank_sha256);
+        assert_eq!(hash_blank.get_str(), blank_sha256_b64);
+
+        let hw = Hashed::hash_string("hello world", HashFn::Sha256).unwrap();
+        dbg!(hw.get_bytes());
+        dbg!(&hw.get_bytes()[..]);
+        assert_eq!(
+            hw.get_bytes()[..],
+            hex!("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")[..]
+        )
     }
 
     #[test]
