@@ -1,6 +1,7 @@
 //! Functionality centred around the [Salt] struct.
 use rand::{distributions::Alphanumeric, Rng};
 
+#[derive(Debug)]
 /// A cryptographic salt utilised for password storage.
 pub struct Salt {
     bytes: Vec<u8>,

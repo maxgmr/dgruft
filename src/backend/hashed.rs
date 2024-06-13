@@ -8,11 +8,13 @@ use crate::backend::salt;
 const HASH_STRING_INVALID_INPUT_MSG: &str = "Input string is not ASCII.";
 
 /// The possible hash functions that dgruft can use.
+#[derive(Debug)]
 pub enum HashFn {
     /// SHA-256 from [sha2] crate.
     Sha256,
 }
 
+#[derive(Debug)]
 /// A hashed string.
 pub struct Hashed {
     string: String,
@@ -101,5 +103,11 @@ mod tests {
 
         assert_ne!(hash_1.get_str(), hash_s1.get_str());
         assert_ne!(hash_s1.get_str(), hash_s2.get_str());
+    }
+
+    #[test]
+    fn test_non_ascii() {
+        let err = Hashed::hash_string("привет", HashFn::Sha256).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidInput);
     }
 }
