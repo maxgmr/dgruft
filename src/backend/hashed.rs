@@ -1,7 +1,7 @@
 //! Functionality related to hashing.
 use base64ct::{Base64, Encoding};
 use sha2::{Digest, Sha256};
-use std::io::{Error, ErrorKind, Result};
+use std::io::{ErrorKind, Result};
 
 use crate::backend::salt;
 
