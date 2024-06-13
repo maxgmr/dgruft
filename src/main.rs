@@ -1,3 +1,5 @@
+use dgruft::backend::salt;
+
 fn main() {
-    println!("Hello, world!");
+    println!("{}", salt::gen_salt_u32());
 }
