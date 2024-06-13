@@ -17,6 +17,7 @@ pub enum HashFn {
 #[derive(Debug)]
 /// A hashed string.
 pub struct Hashed {
+    bytes: Vec<u8>,
     string: String,
     hash_fn: HashFn,
     salt: Option<salt::Salt>,
@@ -28,6 +29,7 @@ impl Hashed {
             let hash = Sha256::digest(input.as_bytes());
             let base64_hash = Base64::encode_string(&hash);
             Ok(Self {
+                bytes: hash.to_vec(),
                 string: base64_hash,
                 hash_fn,
                 salt: None,
@@ -49,6 +51,7 @@ impl Hashed {
                 .finalize();
             let base64_hash = Base64::encode_string(&hash);
             Ok(Self {
+                bytes: hash.to_vec(),
                 string: base64_hash,
                 hash_fn,
                 salt: None,
@@ -59,6 +62,11 @@ impl Hashed {
                 HASH_STRING_INVALID_INPUT_MSG,
             ))
         }
+    }
+
+    /// Get the bytes of this [Hashed].
+    pub fn get_bytes(&self) -> &Vec<u8> {
+        &self.bytes
     }
 
     /// Get the string contents of this [Hashed].
