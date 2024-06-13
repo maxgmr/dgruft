@@ -10,6 +10,7 @@ license-file = "LICENSE"
 [dependencies]
 rand = "0.8.5"
 sha2 = "0.10"
+base64ct = { version = "1.6", features = ["alloc"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4"
