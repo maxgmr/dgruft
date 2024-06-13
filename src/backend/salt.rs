@@ -1,3 +1,4 @@
+//! Functionality centred around the [Salt] struct.
 use rand::{distributions::Alphanumeric, Rng};
 
 /// A cryptographic salt utilised for password storage.
