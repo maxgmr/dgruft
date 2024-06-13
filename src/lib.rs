@@ -1,6 +1,11 @@
+//! Modules utilised by dgruft.
+//!
+//! This is a personal project; using `dgruft` for storage of confidential information is *not
+//! recommended*.
 #![warn(missing_docs)]
 
-mod backend;
-mod frontend;
-
-pub use backend::hash;
+/// Backend code for dgruft.
+pub mod backend;
+#[cfg(feature = "frontend")]
+/// Frontend code for dgruft.
+pub mod frontend;

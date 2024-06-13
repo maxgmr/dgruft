@@ -1,1 +1,2 @@
-pub mod hash;
+pub mod hashed;
+pub mod salt;
