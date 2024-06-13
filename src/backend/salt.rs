@@ -1,7 +1,28 @@
-use rand::Rng;
+use rand::{distributions::Alphanumeric, Rng};
 
-// Generate a random 32 bit integer for use as a salt.
-pub fn gen_salt_u32() -> u32 {
-    let mut rng = rand::thread_rng();
-    rng.gen()
+/// A cryptographic salt utilised for password storage.
+pub struct Salt {
+    bytes: Vec<u8>,
+    string: String,
+}
+impl Salt {
+    /// Generate a random alphanumeric salt of a given length.
+    pub fn new(length: usize) -> Self {
+        let bytes: Vec<u8> = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(length)
+            .collect();
+        let string = bytes.iter().map(|byte| char::from(*byte)).collect();
+        Salt { bytes, string }
+    }
+
+    /// Get this salt in bytes form.
+    pub fn get_bytes(&self) -> &Vec<u8> {
+        &self.bytes
+    }
+
+    /// Get this salt in alphanumeric ASCII string form.
+    pub fn get_str(&self) -> &str {
+        &self.string
+    }
 }
