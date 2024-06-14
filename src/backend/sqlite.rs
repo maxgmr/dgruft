@@ -96,6 +96,7 @@ impl Database {
         }
     }
 
+    #[allow(dead_code)]
     fn clear_all_tables(&mut self) -> usize {
         // Get list of all table names
         let mut statement = self.connection.prepare(SELECT_ALL_TABLES).unwrap();

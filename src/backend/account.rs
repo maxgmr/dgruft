@@ -162,7 +162,7 @@ impl Account {
 
     /// Get the [HashFn] used to encrypt this account's password.
     pub fn get_hash_fn(&self) -> &HashFn {
-        &self.password.get_hash_fn()
+        self.password.get_hash_fn()
     }
 
     /// Get the [Salt] used to encrypt this account's password.
