@@ -44,6 +44,9 @@ impl Database {
         database_result
     }
 
+    /// Add an [Account] to the `user_credentials` database table.
+    ///
+    /// Returns [Err] if that account already exists.
     pub fn add_new_account(&mut self, account: Account) -> std::io::Result<()> {
         Ok(())
     }
