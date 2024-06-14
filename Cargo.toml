@@ -12,9 +12,11 @@ rand = "0.8.5"
 sha2 = "0.10"
 base64ct = { version = "1.6", features = ["alloc"] }
 sqlite = "0.36"
+regex = "1.10"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+hex-literal = "0.4"
 
 [features]
 frontend = []

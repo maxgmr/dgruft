@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind};
 
 use crate::helpers::is_base64;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// A cryptographic salt utilised for password storage.
 pub struct Salt {
     bytes: Vec<u8>,
