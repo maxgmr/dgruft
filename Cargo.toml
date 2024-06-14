@@ -1,6 +1,6 @@
 [package]
 name = "dgruft"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Max Gilmour"]
 readme = "README.md"
@@ -11,9 +11,12 @@ license-file = "LICENSE"
 rand = "0.8.5"
 sha2 = "0.10"
 base64ct = { version = "1.6", features = ["alloc"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+regex = "1.10"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+hex-literal = "0.4"
 
 [features]
 frontend = []
