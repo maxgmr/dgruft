@@ -1,3 +1,4 @@
+//! Functionality for individual dgruft user accounts.
 use std::fmt;
 
 use crate::backend::{
