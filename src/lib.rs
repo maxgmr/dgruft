@@ -9,3 +9,5 @@ pub mod backend;
 #[cfg(feature = "frontend")]
 /// Frontend code for dgruft.
 pub mod frontend;
+/// Small, general helper functions.
+pub mod helpers;
