@@ -1,7 +1,3 @@
-pub const DROP_TABLE: &str = "
-    DROP TABLE IF EXISTS {}
-";
-
 pub const SELECT_ALL_TABLES: &str = "
     SELECT name
     FROM sqlite_schema
