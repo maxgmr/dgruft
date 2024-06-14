@@ -15,6 +15,24 @@ pub enum HashFn {
     Sha256,
 }
 
+/// Turn [HashFn] into a string.
+pub fn hash_fn_to_string(hash_fn: &HashFn) -> String {
+    match hash_fn {
+        HashFn::Sha256 => String::from("sha256"),
+    }
+}
+
+/// Get [HashFn] from a string.
+pub fn hash_fn_from_string(string: &str) -> std::io::Result<HashFn> {
+    match string {
+        "sha256" => Ok(HashFn::Sha256),
+        _ => Err(Error::new(
+            ErrorKind::NotFound,
+            format!("No known hash function matching string {}", string),
+        )),
+    }
+}
+
 #[derive(Debug)]
 /// A hashed string.
 pub struct Hashed {

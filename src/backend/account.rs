@@ -75,13 +75,11 @@ pub struct Restrictions {
 }
 
 #[derive(Debug)]
-/// An account with a username and hashed password. Also shows the salt and hash function used to
+/// An account with a username and [Hashed] password. Also shows the salt and hash function used to
 /// encrypt the password.
 pub struct Account {
     username: String,
     password: Hashed,
-    hash_fn: HashFn,
-    salt: Salt,
 }
 
 impl Account {
@@ -141,9 +139,15 @@ impl Account {
         Ok(Self {
             username,
             password: password_hashed_salted,
-            hash_fn,
-            salt,
         })
+    }
+
+    /// Load an existing [Account] directly.
+    pub fn load(username: &str, password: Hashed) -> Self {
+        Self {
+            username: username.to_owned(),
+            password,
+        }
     }
 
     /// Get this account's username.
@@ -158,12 +162,12 @@ impl Account {
 
     /// Get the [HashFn] used to encrypt this account's password.
     pub fn get_hash_fn(&self) -> &HashFn {
-        &self.hash_fn
+        &self.password.get_hash_fn()
     }
 
     /// Get the [Salt] used to encrypt this account's password.
-    pub fn get_salt(&self) -> &Salt {
-        &self.salt
+    pub fn get_salt(&self) -> &Option<Salt> {
+        self.password.get_salt()
     }
 }
 
