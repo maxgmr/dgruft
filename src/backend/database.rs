@@ -4,6 +4,7 @@ use std::ffi::OsStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
+use crate::backend::sql_schemas::*;
 use crate::backend::sql_statements::*;
 use crate::backend::{account::Account, hashed, salt};
 
