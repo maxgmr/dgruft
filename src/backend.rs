@@ -1,6 +1,6 @@
 pub mod account;
+pub mod database;
 pub mod hashed;
 pub mod salt;
-pub mod sqlite;
 
 mod sql_statements;

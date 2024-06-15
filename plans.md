@@ -1,7 +1,7 @@
 # Possible Features
 
 - Google Drive storage
-- 2FA
+- 2FA (Auth app API)
 
 # Possible Improvements
 
