@@ -1,5 +1,5 @@
 //! All functionality related to the [sqlite] database dgruft uses for persistence.
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{config::DbConfig, Connection, OpenFlags};
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -27,7 +27,9 @@ impl Database {
             &path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
+        connection.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true)?;
         connection.execute(CREATE_USER_CREDENTIALS, ())?;
+        connection.execute(CREATE_PASSWORDS, ())?;
         Ok(Self {
             path: PathBuf::from(&path),
             connection,
@@ -135,7 +137,7 @@ mod tests {
     fn test_clear() {
         clear_test_db();
         let mut test_db = test_db();
-        assert_eq!(test_db.clear_all_tables(), 1);
+        assert_eq!(test_db.clear_all_tables(), 2);
         assert_eq!(test_db.clear_all_tables(), 0);
     }
 
