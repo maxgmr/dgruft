@@ -1,9 +1,7 @@
 //! All functionality related to the [sqlite] database dgruft uses for persistence.
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use std::ffi::OsStr;
 use std::fmt::Display;
-use std::fs;
-use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use crate::backend::sql_statements::*;
@@ -19,44 +17,32 @@ pub struct Database {
 }
 impl Database {
     /// Open a new connection to the database at the given path.
-    pub fn connect<P>(path: P) -> std::io::Result<Self>
+    pub fn connect<P>(path: P) -> rusqlite::Result<Self>
     where
         P: AsRef<Path> + AsRef<OsStr> + Display,
     {
         // Don't create a new .db file if no db exists at the chosen path
-        if fs::metadata(&path).is_err() {
-            return Err(Error::new(
-                ErrorKind::NotFound,
-                format!("No SQLite database found at \"{}\".", path),
-            ));
-        }
-        let database_result = match Connection::open(&path) {
-            Ok(connection) => Ok(Self {
-                path: PathBuf::from(&path),
-                connection,
-            }),
-            Err(e) => Err(Error::new(ErrorKind::InvalidInput, e.to_string())),
-        };
-        if let Ok(database) = &database_result {
-            // Create user credentials table if it doesn't already exist
-            database
-                .connection
-                .execute(CREATE_USER_CREDENTIALS, ())
-                .unwrap();
-        }
-        database_result
+        let connection = Connection::open_with_flags(
+            &path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        connection.execute(CREATE_USER_CREDENTIALS, ())?;
+        Ok(Self {
+            path: PathBuf::from(&path),
+            connection,
+        })
     }
 
     /// Retrieve account credentials from the database as [Account].
-    pub fn get_account(&self, username: &str) -> std::io::Result<Option<Account>> {
-        let mut statement = self.connection.prepare(GET_ACCOUNT).unwrap();
+    pub fn get_account(&self, username: &str) -> rusqlite::Result<Option<Account>> {
+        let mut statement = self.connection.prepare(GET_ACCOUNT)?;
         let account_result = statement.query_row([username], |row| {
             Ok(Account::load(
-                &row.get::<usize, String>(0).unwrap(),
+                &row.get::<usize, String>(0)?,
                 hashed::Hashed::from_string(
-                    &row.get::<usize, String>(1).unwrap(),
-                    Some(salt::Salt::from_string(&row.get::<usize, String>(2).unwrap()).unwrap()),
-                    hashed::hash_fn_from_string(&row.get::<usize, String>(3).unwrap()).unwrap(),
+                    &row.get::<usize, String>(1)?,
+                    Some(salt::Salt::from_string(&row.get::<usize, String>(2)?).unwrap()),
+                    hashed::hash_fn_from_string(&row.get::<usize, String>(3)?).unwrap(),
                 )
                 .unwrap(),
             ))
@@ -64,36 +50,23 @@ impl Database {
         match account_result {
             Ok(account) => Ok(Some(account)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
+            Err(e) => Err(e),
         }
     }
 
     /// Add an [Account] to the `user_credentials` database table.
     /// Return [Err] if that account already exists.
-    pub fn add_new_account(&mut self, account: Account) -> std::io::Result<()> {
-        let mut existing_account = self.connection.prepare(GET_ACCOUNT).unwrap();
-        if existing_account.exists([account.get_username()]).unwrap() {
-            Err(Error::new(
-                ErrorKind::AlreadyExists,
-                format!(
-                    "Account with username '{}' already exists.",
-                    account.get_username()
-                ),
-            ))
-        } else {
-            self.connection
-                .execute(
-                    INSERT_NEW_ACCOUNT,
-                    (
-                        account.get_username(),
-                        account.get_password().get_str(),
-                        account.get_salt().as_ref().unwrap().get_str(),
-                        hashed::hash_fn_to_string(account.get_hash_fn()),
-                    ),
-                )
-                .unwrap();
-            Ok(())
-        }
+    pub fn add_new_account(&mut self, account: Account) -> rusqlite::Result<()> {
+        self.connection.execute(
+            INSERT_NEW_ACCOUNT,
+            (
+                account.get_username(),
+                account.get_password().get_str(),
+                account.get_salt().as_ref().unwrap().get_str(),
+                hashed::hash_fn_to_string(account.get_hash_fn()),
+            ),
+        )?;
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -126,6 +99,7 @@ impl Database {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use rusqlite::ErrorCode;
 
     fn test_db() -> Database {
         Database::connect("./dbs/dgruft-test.db").unwrap()
@@ -149,7 +123,7 @@ mod tests {
     fn test_dne() {
         let err = Database::connect("./not/a/real/path/test.db").unwrap_err();
 
-        if let ErrorKind::NotFound = err.kind() {
+        if let Some(ErrorCode::CannotOpen) = err.sqlite_error_code() {
         } else {
             dbg!(&err);
             panic!("Wrong error type");
@@ -174,7 +148,7 @@ mod tests {
         let err = test_db
             .add_new_account(Account::load("mister_awesome123", test_password()))
             .unwrap_err();
-        if let ErrorKind::AlreadyExists = err.kind() {
+        if let Some(ErrorCode::ConstraintViolation) = err.sqlite_error_code() {
         } else {
             dbg!(&err);
             panic!("Wrong error type");
