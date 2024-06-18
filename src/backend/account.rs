@@ -1,173 +1,236 @@
 //! Functionality for individual dgruft user accounts.
-use std::fmt;
+use crate::backend::{encrypted, encrypted::Encrypted, hashed::Hashed};
+use crate::error::Error;
+use crate::helpers;
 
-use crate::backend::{
-    hashed::{HashFn, Hashed},
-    salt::Salt,
-};
-
+/// An account with a username, password, and encryption key.
 #[derive(Debug)]
-/// Different ways in which the arguments to [Account::new] can be invalid.
-pub enum AccountCreationError {
-    /// The username is too long. usize = max length.
-    UsernameTooLong(usize),
-    /// The username is too short. usize = min length.
-    UsernameTooShort(usize),
-    /// The password is too long. usize = max length.
-    PasswordTooLong(usize),
-    /// The password is too short. usize = min length.
-    PasswordTooShort(usize),
-    /// There are invalid chars in the username. char = invalid char.
-    InvalidUsernameChars(char),
-    /// There are invalid chars in the password. char = invalid char.
-    InvalidPasswordChars(char),
-    /// There was an error when calling [Hashed::new]. String = the error.
-    PasswordHashingError(String),
-}
-impl fmt::Display for AccountCreationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let message = match self {
-            AccountCreationError::UsernameTooLong(max_len) => {
-                format!("Username must be {} characters or less.", max_len)
-            }
-            AccountCreationError::UsernameTooShort(min_len) => {
-                format!("Username must be at least {} characters.", min_len)
-            }
-            AccountCreationError::PasswordTooLong(max_len) => {
-                format!("Password must be {} characters or less.", max_len)
-            }
-            AccountCreationError::PasswordTooShort(min_len) => {
-                format!("Password must be at least {} characters.", min_len)
-            }
-            AccountCreationError::InvalidUsernameChars(forbidden_char) => {
-                format!(
-                    "Usernames cannot contain this character: '{}'",
-                    forbidden_char
-                )
-            }
-            AccountCreationError::InvalidPasswordChars(forbidden_char) => {
-                format!(
-                    "Passwords cannot contain this character: '{}'",
-                    forbidden_char
-                )
-            }
-            AccountCreationError::PasswordHashingError(message) => message.to_owned(),
-        };
-        write!(f, "{}", message)
-    }
-}
-impl std::error::Error for AccountCreationError {}
-
-/// The restrictions placed on this particular account.
-pub struct Restrictions {
-    /// The minimum allowed length of the username.
-    pub username_min_length: usize,
-    /// The maximum allowed length of the username.
-    pub username_max_length: usize,
-    /// The minimum allowed length of the password.
-    pub password_min_length: usize,
-    /// The maximum allowed length of the password.
-    pub password_max_length: usize,
-    /// The characters allowed in the username.
-    pub allowed_username_characters: String,
-    /// The characters allowed in the password.
-    pub allowed_password_characters: String,
-}
-
-#[derive(Debug)]
-/// An account with a username and [Hashed] password. Also shows the salt and hash function used to
-/// encrypt the password.
 pub struct Account {
     username: String,
-    password: Hashed,
+    password_salt: [u8; 64],
+    dbl_hashed_password: Hashed,
+    encrypted_key: Encrypted,
 }
-
 impl Account {
-    /// Create a new [Account] from a given username and password. Returns [AccountCreationError] if [Restrictions]
-    /// are not met.
-    pub fn new(
-        username: String,
-        password: String,
-        restrictions: Restrictions,
-        hash_fn: HashFn,
-        salt_size: usize,
-    ) -> Result<Self, AccountCreationError> {
-        // Check username & password against restrictions
-        if username.len() < restrictions.username_min_length {
-            return Err(AccountCreationError::UsernameTooShort(
-                restrictions.username_min_length,
-            ));
-        }
-        if username.len() > restrictions.username_max_length {
-            return Err(AccountCreationError::UsernameTooLong(
-                restrictions.username_max_length,
-            ));
-        }
-        if password.len() < restrictions.password_min_length {
-            return Err(AccountCreationError::PasswordTooShort(
-                restrictions.password_min_length,
-            ));
-        }
-        if password.len() > restrictions.password_max_length {
-            return Err(AccountCreationError::PasswordTooLong(
-                restrictions.password_max_length,
-            ));
-        }
-        for c in username.chars() {
-            if !restrictions.allowed_username_characters.contains(c) {
-                return Err(AccountCreationError::InvalidUsernameChars(c));
-            }
-        }
-        for c in password.chars() {
-            if !restrictions.allowed_password_characters.contains(c) {
-                return Err(AccountCreationError::InvalidPasswordChars(c));
-            }
-        }
-
-        // Params OK
-        let salt = Salt::new(salt_size);
-        let password_hashed_salted = match Hashed::new(&password, hash_fn, Some(&salt)) {
-            Ok(p_h_s) => p_h_s,
-            Err(e) => {
-                return Err(AccountCreationError::PasswordHashingError(format!(
-                    "{:?}",
-                    e.get_ref()
-                )));
-            }
-        };
-
+    /// Create a new [Account] from a username and a password.
+    pub fn new(username: &str, password: &str) -> Result<Self, Error> {
+        // Generate a random AES-256 encryption key
+        let key = encrypted::new_key(None);
+        // Hash the password
+        let hashed_password = Hashed::new(password.as_bytes());
+        // Use the hashed password as the key to encrypt the encryption key
+        let encrypted_key = Encrypted::new(&key, hashed_password.hash())?;
+        // Hash the password again to store it
+        let dbl_hashed_password = Hashed::new(hashed_password.hash());
         Ok(Self {
-            username,
-            password: password_hashed_salted,
+            username: username.to_string(),
+            password_salt: *hashed_password.salt(),
+            dbl_hashed_password,
+            encrypted_key,
         })
     }
 
-    /// Load an existing [Account] directly.
-    pub fn load(username: &str, password: Hashed) -> Self {
-        Self {
-            username: username.to_owned(),
-            password,
+    /// Load an [Account] from a [Base64Account]— a set of base-64-encoded strings.
+    pub fn from_b64(b64_account: Base64Account) -> Result<Self, Error> {
+        let username = match std::str::from_utf8(&helpers::b64_to_bytes(&b64_account.b64_username)?)
+        {
+            Ok(username) => username.to_owned(),
+            Err(_) => return Err(Error::Utf8FromBytesError(String::from("username"))),
+        };
+        let password_salt: [u8; 64] =
+            helpers::b64_to_fixed(b64_account.b64_password_salt, "b64_password_salt")?;
+        let dbl_hashed_password = Hashed::from_b64(
+            &b64_account.b64_dbl_hashed_password_hash,
+            &b64_account.b64_dbl_hashed_password_salt,
+        )?;
+        let encrypted_key = Encrypted::from_b64(
+            &b64_account.b64_encrypted_key_ciphertext,
+            &b64_account.b64_encrypted_key_nonce,
+        )?;
+
+        Ok(Self {
+            username,
+            password_salt,
+            dbl_hashed_password,
+            encrypted_key,
+        })
+    }
+
+    /// Convert this [Account] to a [Base64Account] for storage.
+    pub fn to_b64(&self) -> Base64Account {
+        Base64Account {
+            b64_username: helpers::bytes_to_b64(self.username().as_bytes()),
+            b64_password_salt: helpers::bytes_to_b64(self.password_salt()),
+            b64_dbl_hashed_password_hash: self.dbl_hashed_password().hash_as_b64(),
+            b64_dbl_hashed_password_salt: self.dbl_hashed_password().salt_as_b64(),
+            b64_encrypted_key_ciphertext: self.encrypted_key().ciphertext_as_b64(),
+            b64_encrypted_key_nonce: self.encrypted_key().nonce_as_b64(),
         }
     }
 
-    /// Get this account's username.
-    pub fn get_username(&self) -> &str {
+    /// Return true iff the entered password matches the password stored in this [Account].
+    pub fn check_password_match(&self, password: &str) -> bool {
+        let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
+        let dbl_hashed_password =
+            Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
+        self.dbl_hashed_password.hash() == dbl_hashed_password.hash()
+    }
+
+    // GETTERS
+
+    /// Return the username of this [Account].
+    pub fn username(&self) -> &str {
         &self.username
     }
 
-    /// Get this account's [Hashed] password.
-    pub fn get_password(&self) -> &Hashed {
+    /// Return the password salt of this [Account].
+    pub fn password_salt(&self) -> &[u8; 64] {
+        &self.password_salt
+    }
+
+    /// Return the double-hashed password of this [Account].
+    pub fn dbl_hashed_password(&self) -> &Hashed {
+        &self.dbl_hashed_password
+    }
+
+    /// Return the encrypted key of this [Account].
+    pub fn encrypted_key(&self) -> &Encrypted {
+        &self.encrypted_key
+    }
+
+    /// Get all fields of this [Account], including the secure ones. Use with caution and
+    /// restraint!
+    pub fn unlock(&self, password: String) -> Result<SecureFields, Error> {
+        let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
+        let dbl_hashed_password =
+            Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
+
+        // Check if password matches
+        if dbl_hashed_password.hash() != self.dbl_hashed_password.hash() {
+            Err(Error::IncorrectPasswordError)
+        } else {
+            // Password OK, continue collecting fields
+            let key: [u8; 32] = self
+                .encrypted_key()
+                .decrypt(hashed_password.hash())?
+                .try_into()
+                .unwrap();
+
+            Ok(SecureFields {
+                username: self.username().to_owned(),
+                password,
+                hashed_password,
+                dbl_hashed_password,
+                key,
+                encrypted_key: self.encrypted_key().clone(),
+            })
+        }
+    }
+}
+
+/// All the fields of an [Account], including the ones only accessible by password. Use with
+/// caution and restraint.
+#[derive(Debug)]
+pub struct SecureFields {
+    username: String,
+    password: String,
+    hashed_password: Hashed,
+    dbl_hashed_password: Hashed,
+    key: [u8; 32],
+    encrypted_key: Encrypted,
+}
+impl SecureFields {
+    /// Return the username of this [SecureFields].
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+    /// Return the password of this [SecureFields].
+    pub fn password(&self) -> &str {
         &self.password
     }
+    /// Return the hashed_password of this [SecureFields].
+    pub fn hashed_password(&self) -> &Hashed {
+        &self.hashed_password
+    }
+    /// Return the dbl_hashed_password of this [SecureFields].
+    pub fn dbl_hashed_password(&self) -> &Hashed {
+        &self.dbl_hashed_password
+    }
+    /// Return the key of this [SecureFields].
+    pub fn key(&self) -> &[u8; 32] {
+        &self.key
+    }
+    /// Return the encrypted_key of this [SecureFields].
+    pub fn encrypted_key(&self) -> &Encrypted {
+        &self.encrypted_key
+    }
+}
 
-    /// Get the [HashFn] used to encrypt this account's password.
-    pub fn get_hash_fn(&self) -> &HashFn {
-        self.password.get_hash_fn()
+/// An [Account] converted for base-64 storage.
+#[derive(Debug)]
+pub struct Base64Account {
+    b64_username: String,
+    b64_password_salt: String,
+    b64_dbl_hashed_password_hash: String,
+    b64_dbl_hashed_password_salt: String,
+    b64_encrypted_key_ciphertext: String,
+    b64_encrypted_key_nonce: String,
+}
+impl Base64Account {
+    /// Create a new [Base64Account].
+    pub fn new(
+        b64_username: String,
+        b64_password_salt: String,
+        b64_dbl_hashed_password_hash: String,
+        b64_dbl_hashed_password_salt: String,
+        b64_encrypted_key_ciphertext: String,
+        b64_encrypted_key_nonce: String,
+    ) -> Self {
+        Self {
+            b64_username,
+            b64_password_salt,
+            b64_dbl_hashed_password_hash,
+            b64_dbl_hashed_password_salt,
+            b64_encrypted_key_ciphertext,
+            b64_encrypted_key_nonce,
+        }
     }
 
-    /// Get the [Salt] used to encrypt this account's password.
-    pub fn get_salt(&self) -> &Option<Salt> {
-        self.password.get_salt()
+    /// Output fields as tuple.
+    pub fn as_tuple(&self) -> (&str, &str, &str, &str, &str, &str) {
+        (
+            self.b64_username(),
+            self.b64_password_salt(),
+            self.b64_dbl_hashed_password_hash(),
+            self.b64_dbl_hashed_password_salt(),
+            self.b64_encrypted_key_ciphertext(),
+            self.b64_encrypted_key_nonce(),
+        )
+    }
+
+    /// Return the base-64 username of this [Base64Account].
+    pub fn b64_username(&self) -> &str {
+        &self.b64_username
+    }
+    /// Return the base-64 password salt of this [Base64Account].
+    pub fn b64_password_salt(&self) -> &str {
+        &self.b64_password_salt
+    }
+    /// Return the base-64 double-hashed password hash of this [Base64Account].
+    pub fn b64_dbl_hashed_password_hash(&self) -> &str {
+        &self.b64_dbl_hashed_password_hash
+    }
+    /// Return the base-64 double-hashed password salt of this [Base64Account].
+    pub fn b64_dbl_hashed_password_salt(&self) -> &str {
+        &self.b64_dbl_hashed_password_salt
+    }
+    /// Return the base-64 encrypted key ciphertext of this [Base64Account].
+    pub fn b64_encrypted_key_ciphertext(&self) -> &str {
+        &self.b64_encrypted_key_ciphertext
+    }
+    /// Return the base-64 encrypted key nonce of this [Base64Account].
+    pub fn b64_encrypted_key_nonce(&self) -> &str {
+        &self.b64_encrypted_key_nonce
     }
 }
 
@@ -176,101 +239,110 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    const USERNAME_ALLOW: &str =
-        "#-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~";
-    const PASSWORD_ALLOW: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-
-    fn get_test_restrictions() -> Restrictions {
-        Restrictions {
-            username_min_length: 3,
-            username_max_length: 32,
-            password_min_length: 8,
-            password_max_length: 512,
-            allowed_username_characters: USERNAME_ALLOW.to_owned(),
-            allowed_password_characters: PASSWORD_ALLOW.to_owned(),
-        }
-    }
-
     #[test]
-    fn test_acc_ok() {
-        Account::new(
-            "account".to_owned(),
-            "password123".to_owned(),
-            get_test_restrictions(),
-            HashFn::Sha256,
-            16,
+    fn test_new_acc() {
+        let my_account = Account::new("my_account", "my_password").unwrap();
+        assert!(my_account.check_password_match("my_password"));
+
+        let incorrect_attempt = my_account
+            .unlock(String::from("not my password"))
+            .unwrap_err();
+        if let Error::IncorrectPasswordError = incorrect_attempt {
+        } else {
+            dbg!(&incorrect_attempt);
+            panic!("Wrong error type");
+        }
+
+        let my_fields = my_account.unlock(String::from("my_password")).unwrap();
+        let hashed_password = Hashed::from_salt(b"my_password", my_account.password_salt());
+        let dbl_hashed_password = Hashed::from_salt(
+            hashed_password.hash(),
+            my_account.dbl_hashed_password().salt(),
+        );
+        let key: [u8; 32] = my_account
+            .encrypted_key()
+            .decrypt(hashed_password.hash())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let encrypted_key = Encrypted::from_nonce(
+            &key,
+            hashed_password.hash(),
+            my_fields.encrypted_key().nonce(),
         )
         .unwrap();
+        assert_eq!("my_account", my_fields.username());
+        assert_eq!("my_password", my_fields.password());
+        assert_eq!(hashed_password.hash(), my_fields.hashed_password().hash());
+        assert_eq!(hashed_password.salt(), my_fields.hashed_password().salt());
+        assert_eq!(
+            dbl_hashed_password.hash(),
+            my_fields.dbl_hashed_password().hash()
+        );
+        assert_eq!(
+            dbl_hashed_password.salt(),
+            my_fields.dbl_hashed_password().salt()
+        );
+        assert_eq!(&key, my_fields.key());
+        assert_eq!(
+            encrypted_key.ciphertext(),
+            my_fields.encrypted_key().ciphertext()
+        );
+        assert_eq!(encrypted_key.nonce(), my_fields.encrypted_key().nonce());
     }
 
     #[test]
-    fn test_acc_user_too_long() {
-        let err = Account::new(
-            String::from("kjsfhalgkjhglksajhgkdjhgalkdsjghaslgkjhkehakhgeghskjgh"),
-            String::from("my password"),
-            get_test_restrictions(),
-            HashFn::Sha256,
-            16,
+    fn test_to_from_b64() {
+        let my_account = Account::new("马克斯", "secretpassword123").unwrap();
+        let hashed_password = Hashed::from_salt(b"secretpassword123", my_account.password_salt());
+        let dbl_hashed_password = Hashed::from_salt(
+            hashed_password.hash(),
+            my_account.dbl_hashed_password().salt(),
+        );
+        let key = my_account
+            .encrypted_key()
+            .decrypt(hashed_password.hash())
+            .unwrap();
+        let encrypted_key = Encrypted::from_nonce(
+            &key,
+            hashed_password.hash(),
+            my_account.encrypted_key().nonce(),
         )
-        .unwrap_err();
-        if let AccountCreationError::UsernameTooLong(max_len) = err {
-            assert_eq!(get_test_restrictions().username_max_length, max_len);
-        } else {
-            panic!("Wrong error type");
-        }
-    }
+        .unwrap();
 
-    #[test]
-    fn test_acc_pass_too_short() {
-        let err = Account::new(
-            String::from("my_account_123"),
-            String::from("heheheh"),
-            get_test_restrictions(),
-            HashFn::Sha256,
-            16,
-        )
-        .unwrap_err();
-        if let AccountCreationError::PasswordTooShort(min_len) = err {
-            assert_eq!(get_test_restrictions().password_min_length, min_len);
-        } else {
-            dbg!(&err);
-            panic!("Wrong error type");
-        }
-    }
+        let my_account_b64 = my_account.to_b64();
+        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username());
+        assert_eq!(
+            dbl_hashed_password.hash_as_b64(),
+            my_account_b64.b64_dbl_hashed_password_hash()
+        );
+        assert_eq!(
+            dbl_hashed_password.salt_as_b64(),
+            my_account_b64.b64_dbl_hashed_password_salt()
+        );
+        assert_eq!(
+            encrypted_key.ciphertext_as_b64(),
+            my_account_b64.b64_encrypted_key_ciphertext()
+        );
+        assert_eq!(
+            encrypted_key.nonce_as_b64(),
+            my_account_b64.b64_encrypted_key_nonce()
+        );
 
-    #[test]
-    fn test_acc_invalid_user_chars() {
-        let err = Account::new(
-            String::from("my_account&_123"),
-            String::from("hehehehe"),
-            get_test_restrictions(),
-            HashFn::Sha256,
-            16,
-        )
-        .unwrap_err();
-        if let AccountCreationError::InvalidUsernameChars(char) = err {
-            assert_eq!('&', char);
-        } else {
-            dbg!(&err);
-            panic!("Wrong error type");
-        }
-    }
-
-    #[test]
-    fn test_acc_invalid_pass_chars() {
-        let err = Account::new(
-            String::from("my_account_123"),
-            String::from("пассворд"),
-            get_test_restrictions(),
-            HashFn::Sha256,
-            16,
-        )
-        .unwrap_err();
-        if let AccountCreationError::InvalidPasswordChars(char) = err {
-            assert_eq!('п', char);
-        } else {
-            dbg!(&err);
-            panic!("Wrong error type");
-        }
+        let my_account_2 = Account::from_b64(my_account_b64).unwrap();
+        assert_eq!("马克斯", my_account_2.username());
+        assert_eq!(
+            dbl_hashed_password.hash(),
+            my_account_2.dbl_hashed_password().hash()
+        );
+        assert_eq!(
+            dbl_hashed_password.salt(),
+            my_account_2.dbl_hashed_password().salt()
+        );
+        assert_eq!(
+            encrypted_key.ciphertext(),
+            my_account_2.encrypted_key.ciphertext()
+        );
+        assert_eq!(encrypted_key.nonce(), my_account_2.encrypted_key.nonce());
     }
 }

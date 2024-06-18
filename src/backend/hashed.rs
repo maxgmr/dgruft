@@ -1,177 +1,173 @@
 //! Functionality related to hashing.
-use base64ct::{Base64, Encoding};
-use sha2::{Digest, Sha256};
-use std::io::{Error, ErrorKind, Result};
+use pbkdf2::pbkdf2_hmac;
+use rand_chacha::{
+    rand_core::{RngCore, SeedableRng},
+    ChaCha20Rng,
+};
+use sha2::Sha256;
 
-use crate::backend::salt;
-use crate::helpers::is_base64;
+use crate::{error::Error, helpers};
 
-const HASH_STRING_INVALID_INPUT_MSG: &str = "Input string is not ASCII.";
-
-/// The possible hash functions that dgruft can use.
-#[derive(Debug, Clone, Copy)]
-pub enum HashFn {
-    /// SHA-256 from [sha2] crate.
-    Sha256,
-}
-
-/// Turn [HashFn] into a string.
-pub fn hash_fn_to_string(hash_fn: &HashFn) -> String {
-    match hash_fn {
-        HashFn::Sha256 => String::from("sha256"),
-    }
-}
-
-/// Get [HashFn] from a string.
-pub fn hash_fn_from_string(string: &str) -> std::io::Result<HashFn> {
-    match string {
-        "sha256" => Ok(HashFn::Sha256),
-        _ => Err(Error::new(
-            ErrorKind::NotFound,
-            format!("No known hash function matching string {}", string),
-        )),
-    }
-}
-
+/// 32 bytes hashed and salted using PBKDF2-HMAC-SHA256 and 64-byte salt.
 #[derive(Debug)]
-/// A hashed string.
 pub struct Hashed {
-    bytes: Vec<u8>,
-    string: String,
-    hash_fn: HashFn,
-    salt: Option<salt::Salt>,
+    hash: [u8; 32],
+    salt: [u8; 64],
 }
 impl Hashed {
-    /// Create a new base 64 [Hashed] using the given [HashFn], optionally with a given [salt::Salt].
-    pub fn new(input: &str, hash_fn: HashFn, salt_opt: Option<&salt::Salt>) -> Result<Self> {
-        if input.is_ascii() {
-            let mut data = input.to_owned();
-            if let Some(salt) = &salt_opt {
-                data.push_str(salt.get_str());
-            }
-            let hash = Sha256::digest(data.as_bytes());
-            let base64_hash = Base64::encode_string(&hash);
-            Ok(Self {
-                bytes: hash.to_vec(),
-                string: base64_hash,
-                hash_fn,
-                salt: salt_opt.cloned(),
-            })
-        } else {
-            Err(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                HASH_STRING_INVALID_INPUT_MSG,
-            ))
-        }
+    const NUM_ITERATIONS: u32 = 50_000;
+
+    /// Hash and salt the given bytes.
+    pub fn new(input_bytes: &[u8]) -> Self {
+        let mut salt = [0u8; 64];
+        let mut rng = ChaCha20Rng::from_entropy();
+        rng.fill_bytes(&mut salt);
+
+        Self::from_salt(input_bytes, &salt)
     }
 
-    /// Read a [Hashed] from a given string.
-    pub fn from_string(
-        hash_str: &str,
-        salt: Option<salt::Salt>,
-        hash_fn: HashFn,
-    ) -> std::io::Result<Self> {
-        if is_base64(hash_str) {
-            match Base64::decode_vec(hash_str) {
-                Ok(bytes) => Ok(Self {
-                    bytes,
-                    string: hash_str.to_owned(),
-                    hash_fn,
-                    salt,
-                }),
-                Err(e) => Err(Error::new(ErrorKind::Other, e.to_string())),
-            }
-        } else {
-            Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "{} is not a valid standard base 64 string.",
-                    hash_str.to_owned()
-                ),
-            ))
-        }
+    /// Hash a byte array using a given salt.
+    pub fn from_salt(input_bytes: &[u8], salt: &[u8; 64]) -> Self {
+        let mut hash = [0u8; 32];
+        pbkdf2_hmac::<Sha256>(input_bytes, salt, Self::NUM_ITERATIONS, &mut hash);
+
+        Self { hash, salt: *salt }
     }
 
-    /// Read a [Hashed] from a given byte vector.
-    pub fn from_bytes(bytes: &[u8], salt: Option<salt::Salt>, hash_fn: HashFn) -> Self {
-        Self {
-            bytes: bytes.to_vec(),
-            string: Base64::encode_string(bytes),
-            hash_fn,
-            salt,
-        }
+    /// Read a [Hashed] from a base-64 string.
+    pub fn from_b64(b64_hash: &str, b64_salt: &str) -> Result<Self, Error> {
+        Ok(Self {
+            hash: helpers::b64_to_fixed::<&str, 32>(b64_hash, "b64_hash")?,
+            salt: helpers::b64_to_fixed::<&str, 64>(b64_salt, "b64_salt")?,
+        })
     }
 
-    /// Get the bytes of this [Hashed].
-    pub fn get_bytes(&self) -> &Vec<u8> {
-        &self.bytes
+    /// Check if the given bytes match the original bytes used to make this [Hashed].
+    pub fn check_match(&self, input_bytes: &[u8]) -> bool {
+        let hashed_input = Self::from_salt(input_bytes, self.salt());
+        *self.hash() == *hashed_input.hash()
     }
 
-    /// Get the string contents of this [Hashed].
-    pub fn get_str(&self) -> &str {
-        &self.string
+    // GETTERS
+
+    /// Return the hash of this [Hashed].
+    pub fn hash(&self) -> &[u8; 32] {
+        &self.hash
     }
 
-    /// Get the function used to hash this [Hashed].
-    pub fn get_hash_fn(&self) -> &HashFn {
-        &self.hash_fn
+    /// Return the hash of this [Hashed] as a base-64 string.
+    pub fn hash_as_b64(&self) -> String {
+        helpers::bytes_to_b64(&self.hash)
     }
 
-    /// Get the [salt::Salt] that was added to the original string (if any).
-    pub fn get_salt(&self) -> &Option<salt::Salt> {
+    /// Return the salt of this [Hashed].
+    pub fn salt(&self) -> &[u8; 64] {
         &self.salt
+    }
+
+    /// Return the salt of this [Hashed] as a base-64 string.
+    pub fn salt_as_b64(&self) -> String {
+        helpers::bytes_to_b64(&self.salt)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex_literal::hex;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_ne};
+
+    fn test_hash() -> &'static [u8; 32] {
+        &[
+            228u8, 229u8, 52u8, 90u8, 187u8, 181u8, 72u8, 158u8, 154u8, 52u8, 159u8, 127u8, 212u8,
+            38u8, 45u8, 177u8, 111u8, 20u8, 254u8, 52u8, 171u8, 100u8, 79u8, 128u8, 116u8, 164u8,
+            53u8, 84u8, 36u8, 101u8, 156u8, 146u8,
+        ]
+    }
+
+    fn test_salt() -> &'static [u8; 64] {
+        &[
+            143u8, 207u8, 88u8, 34u8, 132u8, 74u8, 129u8, 80u8, 206u8, 110u8, 103u8, 116u8, 93u8,
+            12u8, 237u8, 139u8, 34u8, 105u8, 169u8, 154u8, 95u8, 29u8, 201u8, 247u8, 111u8, 5u8,
+            85u8, 70u8, 58u8, 19u8, 185u8, 232u8, 86u8, 244u8, 29u8, 140u8, 125u8, 90u8, 224u8,
+            153u8, 19u8, 37u8, 115u8, 174u8, 57u8, 122u8, 113u8, 32u8, 208u8, 227u8, 111u8, 252u8,
+            248u8, 158u8, 188u8, 40u8, 5u8, 26u8, 178u8, 176u8, 128u8, 61u8, 221u8, 106u8,
+        ]
+    }
 
     #[test]
-    fn test_hash_sha256() {
-        let hash_1 = Hashed::new("password", HashFn::Sha256, None).unwrap();
-        let hash_2 = Hashed::new("password", HashFn::Sha256, None).unwrap();
-        assert_eq!(hash_1.get_str(), hash_2.get_str());
-        assert_eq!(hash_1.get_bytes(), hash_2.get_bytes());
+    fn test_pbkdf() {
+        let hash_1 = Hashed::new(b"password");
+        let hash_2 = Hashed::new(b"password");
+        assert_ne!(hash_1.hash_as_b64(), hash_2.hash_as_b64());
+        assert_ne!(hash_1.hash(), hash_2.hash());
 
-        let blank_sha256_b64 = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
-        let hash_blank = Hashed::new("", HashFn::Sha256, None).unwrap();
-        assert_eq!(hash_blank.get_str(), blank_sha256_b64);
+        assert!(hash_1.check_match(b"password"));
+        assert!(hash_2.check_match(b"password"));
+    }
 
-        let hw = Hashed::new("hello world", HashFn::Sha256, None).unwrap();
-        dbg!(hw.get_bytes());
-        dbg!(&hw.get_bytes()[..]);
-        assert_eq!(
-            hw.get_bytes()[..],
-            hex!("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")[..]
+    #[test]
+    fn test_use_salt() {
+        let hash_1 = Hashed::new(b"password");
+        let hash_2 = Hashed::from_salt(b"password", hash_1.salt());
+        assert_eq!(hash_1.hash(), hash_2.hash());
+        assert!(hash_1.check_match(b"password"));
+        assert!(hash_2.check_match(b"password"));
+    }
+
+    #[test]
+    fn test_from_b64() {
+        let hashed = Hashed::from_b64(
+            &helpers::bytes_to_b64(test_hash()),
+            &helpers::bytes_to_b64(test_salt()),
         )
+        .unwrap();
+        assert_eq!(hashed.hash(), test_hash());
+        assert_eq!(hashed.salt(), test_salt());
     }
 
     #[test]
-    fn test_hash_sha256_salt() {
-        let hash_1 = Hashed::new("password", HashFn::Sha256, None).unwrap();
-        let hash_s1 = Hashed::new("password", HashFn::Sha256, Some(&salt::Salt::new(16))).unwrap();
-        let hash_s2 = Hashed::new("password", HashFn::Sha256, Some(&salt::Salt::new(16))).unwrap();
-
-        assert_ne!(hash_1.get_str(), hash_s1.get_str());
-        assert_ne!(hash_s1.get_str(), hash_s2.get_str());
+    fn test_invalid_hash_length_b64() {
+        let hashed_err = Hashed::from_b64(
+            &helpers::bytes_to_b64(&[&test_hash()[..], &[255u8]].concat()),
+            &helpers::bytes_to_b64(test_salt()),
+        )
+        .unwrap_err();
+        if let Error::InvalidLengthB64Error(location, intended_length, actual_length) = hashed_err {
+            assert_eq!(location, String::from("b64_hash"));
+            assert_eq!(intended_length, 32);
+            assert_eq!(actual_length, 33);
+        } else {
+            dbg!(&hashed_err);
+            panic!("Wrong error type");
+        }
     }
 
     #[test]
-    fn test_non_ascii() {
-        let err = Hashed::new("привет", HashFn::Sha256, None).unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::InvalidInput);
+    fn test_invalid_salt_length_b64() {
+        let hashed_err = Hashed::from_b64(
+            &helpers::bytes_to_b64(test_hash()),
+            &helpers::bytes_to_b64(&test_salt()[1..]),
+        )
+        .unwrap_err();
+        if let Error::InvalidLengthB64Error(location, intended_length, actual_length) = hashed_err {
+            assert_eq!(location, String::from("b64_salt"));
+            assert_eq!(intended_length, 64);
+            assert_eq!(actual_length, 63);
+        } else {
+            dbg!(&hashed_err);
+            panic!("Wrong error type");
+        }
     }
 
     #[test]
-    fn test_compare_salted_hash() {
-        let password = "myawesomepassword";
-        let salt = salt::Salt::new(16);
-        let salted_hash_1 = Hashed::new(password, HashFn::Sha256, Some(&salt)).unwrap();
-        let salted_hash_2 = Hashed::new(password, HashFn::Sha256, Some(&salt)).unwrap();
+    fn test_to_from_b64() {
+        let hashed_1 = Hashed::new(b"hello, world!");
 
-        assert_eq!(salted_hash_1.get_str(), salted_hash_2.get_str());
+        let hash_b64 = hashed_1.hash_as_b64();
+        let salt_b64 = hashed_1.salt_as_b64();
+        let hashed_2 = Hashed::from_b64(&hash_b64, &salt_b64).unwrap();
+
+        assert!(hashed_1.check_match(b"hello, world!"));
+        assert!(hashed_2.check_match(b"hello, world!"));
     }
 }
