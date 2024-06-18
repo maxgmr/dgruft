@@ -1,5 +1,4 @@
 //! General TUI app functionality.
-
 use crate::frontend::config::Config;
 
 /// The TUI application.

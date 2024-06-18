@@ -1,8 +1,9 @@
 //! All functionality related to the [SQLite](https://www.sqlite.org/about.html) database dgruft uses for persistence.
-use rusqlite::{config::DbConfig, Connection, OpenFlags};
 use std::ffi::OsStr;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
+
+use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
 use crate::backend::account::Base64Account;
 use crate::backend::{sql_schemas::*, sql_statements::*};

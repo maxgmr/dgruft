@@ -1,9 +1,10 @@
 //! Functionality related to user configuration.
+use std::{env, fs, io::ErrorKind, path::PathBuf};
+
 use color_eyre::eyre;
 use directories::ProjectDirs;
 use ratatui::style::Color;
 use serde::Deserialize;
-use std::{env, fs, io::ErrorKind, path::PathBuf};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 
