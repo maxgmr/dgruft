@@ -1,6 +1,6 @@
 [package]
 name = "dgruft"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Max Gilmour"]
 readme = "README.md"
@@ -10,6 +10,9 @@ license-file = "LICENSE"
 [dependencies]
 aes-gcm = "0.10"
 base64ct = { version = "1.6", features = ["alloc"] }
+clap = "4.5"
+color-eyre = "0.6"
+directories = "5.0"
 pbkdf2 = "0.12"
 rand_chacha = "0.3"
 regex = "1.10"
