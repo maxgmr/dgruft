@@ -12,6 +12,7 @@ aes-gcm = "0.10"
 base64ct = { version = "1.6", features = ["alloc"] }
 clap = "4.5"
 color-eyre = "0.6"
+crossterm = "0.27"
 directories = "5.0"
 edit = "0.1"
 pbkdf2 = "0.12"

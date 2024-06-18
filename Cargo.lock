@@ -352,6 +352,7 @@ dependencies = [
  "base64ct",
  "clap",
  "color-eyre",
+ "crossterm",
  "directories",
  "edit",
  "hex-literal",
