@@ -168,68 +168,24 @@ impl SecureFields {
 /// An [Account] converted for base-64 storage.
 #[derive(Debug)]
 pub struct Base64Account {
-    b64_username: String,
-    b64_password_salt: String,
-    b64_dbl_hashed_password_hash: String,
-    b64_dbl_hashed_password_salt: String,
-    b64_encrypted_key_ciphertext: String,
-    b64_encrypted_key_nonce: String,
+    pub b64_username: String,
+    pub b64_password_salt: String,
+    pub b64_dbl_hashed_password_hash: String,
+    pub b64_dbl_hashed_password_salt: String,
+    pub b64_encrypted_key_ciphertext: String,
+    pub b64_encrypted_key_nonce: String,
 }
 impl Base64Account {
-    /// Create a new [Base64Account].
-    pub fn new(
-        b64_username: String,
-        b64_password_salt: String,
-        b64_dbl_hashed_password_hash: String,
-        b64_dbl_hashed_password_salt: String,
-        b64_encrypted_key_ciphertext: String,
-        b64_encrypted_key_nonce: String,
-    ) -> Self {
-        Self {
-            b64_username,
-            b64_password_salt,
-            b64_dbl_hashed_password_hash,
-            b64_dbl_hashed_password_salt,
-            b64_encrypted_key_ciphertext,
-            b64_encrypted_key_nonce,
-        }
-    }
-
     /// Output fields as tuple.
     pub fn as_tuple(&self) -> (&str, &str, &str, &str, &str, &str) {
         (
-            self.b64_username(),
-            self.b64_password_salt(),
-            self.b64_dbl_hashed_password_hash(),
-            self.b64_dbl_hashed_password_salt(),
-            self.b64_encrypted_key_ciphertext(),
-            self.b64_encrypted_key_nonce(),
+            &self.b64_username,
+            &self.b64_password_salt,
+            &self.b64_dbl_hashed_password_hash,
+            &self.b64_dbl_hashed_password_salt,
+            &self.b64_encrypted_key_ciphertext,
+            &self.b64_encrypted_key_nonce,
         )
-    }
-
-    /// Return the base-64 username of this [Base64Account].
-    pub fn b64_username(&self) -> &str {
-        &self.b64_username
-    }
-    /// Return the base-64 password salt of this [Base64Account].
-    pub fn b64_password_salt(&self) -> &str {
-        &self.b64_password_salt
-    }
-    /// Return the base-64 double-hashed password hash of this [Base64Account].
-    pub fn b64_dbl_hashed_password_hash(&self) -> &str {
-        &self.b64_dbl_hashed_password_hash
-    }
-    /// Return the base-64 double-hashed password salt of this [Base64Account].
-    pub fn b64_dbl_hashed_password_salt(&self) -> &str {
-        &self.b64_dbl_hashed_password_salt
-    }
-    /// Return the base-64 encrypted key ciphertext of this [Base64Account].
-    pub fn b64_encrypted_key_ciphertext(&self) -> &str {
-        &self.b64_encrypted_key_ciphertext
-    }
-    /// Return the base-64 encrypted key nonce of this [Base64Account].
-    pub fn b64_encrypted_key_nonce(&self) -> &str {
-        &self.b64_encrypted_key_nonce
     }
 }
 
@@ -310,22 +266,22 @@ mod tests {
         .unwrap();
 
         let my_account_b64 = my_account.to_b64();
-        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username());
+        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username);
         assert_eq!(
             dbl_hashed_password.hash_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_hash()
+            my_account_b64.b64_dbl_hashed_password_hash
         );
         assert_eq!(
             dbl_hashed_password.salt_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_salt()
+            my_account_b64.b64_dbl_hashed_password_salt
         );
         assert_eq!(
             encrypted_key.ciphertext_as_b64(),
-            my_account_b64.b64_encrypted_key_ciphertext()
+            my_account_b64.b64_encrypted_key_ciphertext
         );
         assert_eq!(
             encrypted_key.nonce_as_b64(),
-            my_account_b64.b64_encrypted_key_nonce()
+            my_account_b64.b64_encrypted_key_nonce
         );
 
         let my_account_2 = Account::from_b64(my_account_b64).unwrap();

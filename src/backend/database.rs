@@ -48,14 +48,14 @@ impl Database {
 
         let account_result =
             statement.query_row([helpers::bytes_to_b64(username.as_bytes())], |row| {
-                Ok(Base64Account::new(
-                    row.get::<usize, String>(0)?,
-                    row.get::<usize, String>(1)?,
-                    row.get::<usize, String>(2)?,
-                    row.get::<usize, String>(3)?,
-                    row.get::<usize, String>(4)?,
-                    row.get::<usize, String>(5)?,
-                ))
+                Ok(Base64Account {
+                    b64_username: row.get::<usize, String>(0)?,
+                    b64_password_salt: row.get::<usize, String>(1)?,
+                    b64_dbl_hashed_password_hash: row.get::<usize, String>(2)?,
+                    b64_dbl_hashed_password_salt: row.get::<usize, String>(3)?,
+                    b64_encrypted_key_ciphertext: row.get::<usize, String>(4)?,
+                    b64_encrypted_key_nonce: row.get::<usize, String>(5)?,
+                })
             });
 
         match account_result {
