@@ -208,6 +208,11 @@ mod tests {
     use crate::backend::account::Account;
     use pretty_assertions::assert_eq;
 
+    const TEST_NAME: &str = "Schploggy Login Info";
+    const TEST_USERNAME: &str = "my_schploggy_account";
+    const TEST_CONTENT: &str = "ILoveSchploggy!123";
+    const TEST_NOTES: &str = "Security Question: My father's middle name is Bob.";
+
     #[test]
     fn test_new_password() {
         let my_account = Account::new("my_account", "my_password").unwrap();
@@ -216,37 +221,37 @@ mod tests {
         let my_password = Password::new(
             my_fields.username(),
             my_fields.key(),
-            "My Schploggy Account",
-            "my_schploggy_account",
-            "ILoveSchploggy!123",
-            "Security Question: My father's middle name is Bob.",
+            TEST_NAME,
+            TEST_USERNAME,
+            TEST_CONTENT,
+            TEST_NOTES,
         )
         .unwrap();
 
         assert_eq!(my_fields.username(), my_password.owner_username());
         assert_eq!(
-            b"My Schploggy Account",
+            TEST_NAME.as_bytes(),
             &my_password
                 .encrypted_name()
                 .decrypt(my_fields.key())
                 .unwrap()[..]
         );
         assert_eq!(
-            b"my_schploggy_account",
+            TEST_USERNAME.as_bytes(),
             &my_password
                 .encrypted_username()
                 .decrypt(my_fields.key())
                 .unwrap()[..]
         );
         assert_eq!(
-            b"ILoveSchploggy!123",
+            TEST_CONTENT.as_bytes(),
             &my_password
                 .encrypted_content()
                 .decrypt(my_fields.key())
                 .unwrap()[..]
         );
         assert_eq!(
-            b"Security Question: My father's middle name is Bob.",
+            TEST_NOTES.as_bytes(),
             &my_password
                 .encrypted_notes()
                 .decrypt(my_fields.key())
@@ -255,5 +260,52 @@ mod tests {
     }
 
     #[test]
-    fn test_to_from_b64() {}
+    fn test_to_from_b64() {
+        let my_key = crate::backend::encrypted::new_key(None);
+        let my_password = Password::new(
+            "my_username",
+            &my_key,
+            TEST_NAME,
+            TEST_USERNAME,
+            TEST_CONTENT,
+            TEST_NOTES,
+        )
+        .unwrap();
+
+        let my_password_b64 = my_password.to_b64();
+        assert_eq!(
+            my_password_b64.b64_owner_username,
+            helpers::bytes_to_b64("my_username".as_bytes())
+        );
+
+        let my_password_from_b64 = Password::from_b64(my_password_b64).unwrap();
+        assert_eq!(
+            my_password_from_b64
+                .encrypted_name()
+                .decrypt(&my_key)
+                .unwrap(),
+            TEST_NAME.as_bytes()
+        );
+        assert_eq!(
+            my_password_from_b64
+                .encrypted_username()
+                .decrypt(&my_key)
+                .unwrap(),
+            TEST_USERNAME.as_bytes()
+        );
+        assert_eq!(
+            my_password_from_b64
+                .encrypted_content()
+                .decrypt(&my_key)
+                .unwrap(),
+            TEST_CONTENT.as_bytes()
+        );
+        assert_eq!(
+            my_password_from_b64
+                .encrypted_notes()
+                .decrypt(&my_key)
+                .unwrap(),
+            TEST_NOTES.as_bytes()
+        );
+    }
 }

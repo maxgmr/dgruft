@@ -3,7 +3,7 @@ mod common;
 use dgruft::backend::*;
 
 #[test]
-fn test_database_with_accounts() {
+fn database_tests() {
     let username_1 = "my_account";
     let password_1 = "this is a passphrase.";
 

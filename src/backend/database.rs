@@ -5,9 +5,12 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
-use crate::backend::account::Base64Account;
-use crate::backend::{sql_schemas::*, sql_statements::*};
-use crate::helpers;
+use crate::{
+    backend::{
+        account::Base64Account, password::Base64Password, sql_schemas::*, sql_statements::*,
+    },
+    helpers,
+};
 
 /// Connection interface to an SQLite database.
 #[derive(Debug)]
@@ -38,6 +41,47 @@ impl Database {
             path: PathBuf::from(&path),
             connection,
         })
+    }
+
+    /// Retrieve a user's stored passwords from the database as a [Vec] of [Base64Password].
+    /// Return [`Ok<None>`] if no account with that username exists.
+    /// Return [Err] on a database error.
+    pub fn get_b64_passwords(
+        &self,
+        username: &str,
+    ) -> rusqlite::Result<Option<Vec<Base64Password>>> {
+        // Ensure account exists
+        if let Err(rusqlite::Error::QueryReturnedNoRows) = self.get_b64_account(username) {
+            return Ok(None);
+        };
+
+        let mut statement = self.connection.prepare(GET_USER_PASSWORDS)?;
+        let rows = statement.query_map([helpers::bytes_to_b64(username.as_bytes())], |row| {
+            Ok(Base64Password {
+                b64_owner_username: row.get::<usize, String>(0)?,
+                b64_name_ciphertext: row.get::<usize, String>(0)?,
+                b64_username_ciphertext: row.get::<usize, String>(0)?,
+                b64_content_ciphertext: row.get::<usize, String>(0)?,
+                b64_notes_ciphertext: row.get::<usize, String>(0)?,
+                b64_name_nonce: row.get::<usize, String>(0)?,
+                b64_username_nonce: row.get::<usize, String>(0)?,
+                b64_content_nonce: row.get::<usize, String>(0)?,
+                b64_notes_nonce: row.get::<usize, String>(0)?,
+            })
+        })?;
+        let mut passwords = Vec::new();
+        for b64password_result in rows {
+            passwords.push(b64password_result?);
+        }
+        Ok(Some(passwords))
+    }
+
+    /// Add a [Base64Password] to the `passwords` database table.
+    /// Return [Err] if that password name + owner username combination already exists.
+    pub fn add_new_password(&mut self, password: Base64Password) -> rusqlite::Result<()> {
+        self.connection
+            .execute(INSERT_NEW_PASSWORD, password.as_tuple())?;
+        Ok(())
     }
 
     /// Retrieve user account credentials from the database as a [Base64Account].
@@ -92,21 +136,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
     use rusqlite::ErrorCode;
-
-    const TEST_DB_PATH: &str = "dbs/database-unit-tests.db";
-
-    fn clear_db() {
-        let mut db = Database::connect(TEST_DB_PATH).unwrap();
-        db.truncate_table("user_credentials").unwrap();
-        db.truncate_table("passwords").unwrap();
-        db.truncate_table("files").unwrap();
-    }
-
-    fn test_db() -> Database {
-        Database::connect(TEST_DB_PATH).unwrap()
-    }
 
     #[test]
     fn test_dne() {
