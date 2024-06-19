@@ -168,11 +168,17 @@ impl SecureFields {
 /// An [Account] converted for base-64 storage.
 #[derive(Debug)]
 pub struct Base64Account {
+    /// Account username in base-64 format.
     pub b64_username: String,
+    /// Account password salt in base-64 format.
     pub b64_password_salt: String,
+    /// Account double-hashed password hash in base-64 format.
     pub b64_dbl_hashed_password_hash: String,
+    /// Account double-hashed password salt in base-64 format.
     pub b64_dbl_hashed_password_salt: String,
+    /// Account encrypted key ciphertext in base-64 format.
     pub b64_encrypted_key_ciphertext: String,
+    /// Account encrypted key nonce in base-64 format.
     pub b64_encrypted_key_nonce: String,
 }
 impl Base64Account {
