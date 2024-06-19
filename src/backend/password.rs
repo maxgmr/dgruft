@@ -2,7 +2,10 @@
 //!
 //! These are *stored passwords*, *not* passwords for `dgruft` accounts.
 use crate::helpers;
-use crate::{backend::encrypted::Encrypted, error::Error};
+use crate::{
+    backend::{account::Account, encrypted::Encrypted},
+    error::Error,
+};
 
 /// A password with an associated owner dgruft account, a username associated with that password, a
 /// name associated with this login info in the dgruft interface, and some personal notes.
@@ -17,18 +20,19 @@ pub struct Password {
 impl Password {
     /// Create a new [Password].
     pub fn new(
-        owner_username: &str,
-        key: &[u8; 32],
+        account: &Account,
+        account_password: &str,
         name: &str,
         username: &str,
         password: &str,
         notes: &str,
     ) -> Result<Self, Error> {
-        let owner_username = owner_username.to_owned();
-        let encrypted_name = Encrypted::new(name.as_bytes(), key)?;
-        let encrypted_username = Encrypted::new(username.as_bytes(), key)?;
-        let encrypted_content = Encrypted::new(password.as_bytes(), key)?;
-        let encrypted_notes = Encrypted::new(notes.as_bytes(), key)?;
+        let account_fields = account.unlock(account_password)?;
+        let owner_username = account_fields.username().to_owned();
+        let encrypted_name = Encrypted::new(name.as_bytes(), account_fields.key())?;
+        let encrypted_username = Encrypted::new(username.as_bytes(), account_fields.key())?;
+        let encrypted_content = Encrypted::new(password.as_bytes(), account_fields.key())?;
+        let encrypted_notes = Encrypted::new(notes.as_bytes(), account_fields.key())?;
         Ok(Self {
             owner_username,
             encrypted_name,
@@ -219,8 +223,8 @@ mod tests {
         let my_fields = my_account.unlock("my_password").unwrap();
 
         let my_password = Password::new(
-            my_fields.username(),
-            my_fields.key(),
+            &my_account,
+            "my_password",
             TEST_NAME,
             TEST_USERNAME,
             TEST_CONTENT,
@@ -261,10 +265,13 @@ mod tests {
 
     #[test]
     fn test_to_from_b64() {
-        let my_key = crate::backend::encrypted::new_key(None);
+        let my_account = Account::new("my_username", "αβγδ").unwrap();
+        let my_fields = my_account.unlock("αβγδ").unwrap();
+        let my_key = my_fields.key();
+
         let my_password = Password::new(
-            "my_username",
-            &my_key,
+            &my_account,
+            "αβγδ",
             TEST_NAME,
             TEST_USERNAME,
             TEST_CONTENT,
@@ -282,28 +289,28 @@ mod tests {
         assert_eq!(
             my_password_from_b64
                 .encrypted_name()
-                .decrypt(&my_key)
+                .decrypt(my_key)
                 .unwrap(),
             TEST_NAME.as_bytes()
         );
         assert_eq!(
             my_password_from_b64
                 .encrypted_username()
-                .decrypt(&my_key)
+                .decrypt(my_key)
                 .unwrap(),
             TEST_USERNAME.as_bytes()
         );
         assert_eq!(
             my_password_from_b64
                 .encrypted_content()
-                .decrypt(&my_key)
+                .decrypt(my_key)
                 .unwrap(),
             TEST_CONTENT.as_bytes()
         );
         assert_eq!(
             my_password_from_b64
                 .encrypted_notes()
-                .decrypt(&my_key)
+                .decrypt(my_key)
                 .unwrap(),
             TEST_NOTES.as_bytes()
         );
