@@ -67,6 +67,14 @@ where
     Ok(output)
 }
 
+/// Convert bytes to UTF-8 string.
+pub fn bytes_to_utf8(bytes: &[u8], debug_name: &str) -> Result<String, Error> {
+    match std::str::from_utf8(bytes) {
+        Ok(utf8) => Ok(utf8.to_owned()),
+        Err(_) => Err(Error::Utf8FromBytesError(String::from(debug_name))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

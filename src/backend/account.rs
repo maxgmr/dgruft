@@ -32,11 +32,10 @@ impl Account {
 
     /// Load an [Account] from a [Base64Account]— a set of base-64-encoded strings.
     pub fn from_b64(b64_account: Base64Account) -> Result<Self, Error> {
-        let username = match std::str::from_utf8(&helpers::b64_to_bytes(&b64_account.b64_username)?)
-        {
-            Ok(username) => username.to_owned(),
-            Err(_) => return Err(Error::Utf8FromBytesError(String::from("username"))),
-        };
+        let username = helpers::bytes_to_utf8(
+            &helpers::b64_to_bytes(&b64_account.b64_username)?,
+            "username",
+        )?;
         let password_salt: [u8; 64] =
             helpers::b64_to_fixed(b64_account.b64_password_salt, "b64_password_salt")?;
         let dbl_hashed_password = Hashed::from_b64(
