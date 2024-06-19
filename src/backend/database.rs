@@ -51,7 +51,7 @@ impl Database {
         username: &str,
     ) -> rusqlite::Result<Option<Vec<Base64Password>>> {
         // Ensure account exists
-        if let Err(rusqlite::Error::QueryReturnedNoRows) = self.get_b64_account(username) {
+        if let Ok(None) = self.get_b64_account(username) {
             return Ok(None);
         };
 
@@ -59,14 +59,14 @@ impl Database {
         let rows = statement.query_map([helpers::bytes_to_b64(username.as_bytes())], |row| {
             Ok(Base64Password {
                 b64_owner_username: row.get::<usize, String>(0)?,
-                b64_name_ciphertext: row.get::<usize, String>(0)?,
-                b64_username_ciphertext: row.get::<usize, String>(0)?,
-                b64_content_ciphertext: row.get::<usize, String>(0)?,
-                b64_notes_ciphertext: row.get::<usize, String>(0)?,
-                b64_name_nonce: row.get::<usize, String>(0)?,
-                b64_username_nonce: row.get::<usize, String>(0)?,
-                b64_content_nonce: row.get::<usize, String>(0)?,
-                b64_notes_nonce: row.get::<usize, String>(0)?,
+                b64_name_ciphertext: row.get::<usize, String>(1)?,
+                b64_username_ciphertext: row.get::<usize, String>(2)?,
+                b64_content_ciphertext: row.get::<usize, String>(3)?,
+                b64_notes_ciphertext: row.get::<usize, String>(4)?,
+                b64_name_nonce: row.get::<usize, String>(5)?,
+                b64_username_nonce: row.get::<usize, String>(6)?,
+                b64_content_nonce: row.get::<usize, String>(7)?,
+                b64_notes_nonce: row.get::<usize, String>(8)?,
             })
         })?;
         let mut passwords = Vec::new();
