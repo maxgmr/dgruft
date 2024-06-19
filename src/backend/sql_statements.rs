@@ -24,8 +24,8 @@ pub const GET_ACCOUNT: &str = "
 
 pub const INSERT_NEW_PASSWORD: &str = "
     INSERT INTO passwords (
-        encrypted_name,
         owner_username,
+        encrypted_name,
         encrypted_username,
         encrypted_content,
         encrypted_notes,
@@ -39,8 +39,8 @@ pub const INSERT_NEW_PASSWORD: &str = "
 
 pub const GET_USER_PASSWORDS: &str = "
     SELECT
-        encrypted_name,
         owner_username,
+        encrypted_name,
         encrypted_username,
         encrypted_content,
         encrypted_notes,

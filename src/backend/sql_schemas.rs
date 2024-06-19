@@ -11,8 +11,8 @@ pub const CREATE_USER_CREDENTIALS: &str = "
 
 pub const CREATE_PASSWORDS: &str = "
     CREATE TABLE IF NOT EXISTS passwords (
-        encrypted_name TEXT NOT NULL,
         owner_username TEXT NOT NULL,
+        encrypted_name TEXT NOT NULL,
         encrypted_username TEXT NOT NULL,
         encrypted_content TEXT NOT NULL,
         encrypted_notes TEXT NOT NULL,
@@ -23,7 +23,7 @@ pub const CREATE_PASSWORDS: &str = "
         FOREIGN KEY (owner_username)
             REFERENCES user_credentials(username)
             ON DELETE CASCADE,
-        PRIMARY KEY(encrypted_name, owner_username)
+        PRIMARY KEY(owner_username, encrypted_name)
     )
 ";
 
