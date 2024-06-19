@@ -99,7 +99,7 @@ impl Account {
 
     /// Get all fields of this [Account], including the secure ones. Use with caution and
     /// restraint!
-    pub fn unlock(&self, password: String) -> Result<SecureFields, Error> {
+    pub fn unlock(&self, password: &str) -> Result<SecureFields, Error> {
         let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
         let dbl_hashed_password =
             Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
@@ -117,7 +117,7 @@ impl Account {
 
             Ok(SecureFields {
                 username: self.username().to_owned(),
-                password,
+                password: password.to_owned(),
                 hashed_password,
                 dbl_hashed_password,
                 key,
@@ -205,16 +205,14 @@ mod tests {
         let my_account = Account::new("my_account", "my_password").unwrap();
         assert!(my_account.check_password_match("my_password"));
 
-        let incorrect_attempt = my_account
-            .unlock(String::from("not my password"))
-            .unwrap_err();
+        let incorrect_attempt = my_account.unlock("not my password").unwrap_err();
         if let Error::IncorrectPasswordError = incorrect_attempt {
         } else {
             dbg!(&incorrect_attempt);
             panic!("Wrong error type");
         }
 
-        let my_fields = my_account.unlock(String::from("my_password")).unwrap();
+        let my_fields = my_account.unlock("my_password").unwrap();
         let hashed_password = Hashed::from_salt(b"my_password", my_account.password_salt());
         let dbl_hashed_password = Hashed::from_salt(
             hashed_password.hash(),
