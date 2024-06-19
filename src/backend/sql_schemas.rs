@@ -13,8 +13,10 @@ pub const CREATE_PASSWORDS: &str = "
     CREATE TABLE IF NOT EXISTS passwords (
         encrypted_name TEXT NOT NULL,
         owner_username TEXT NOT NULL,
+        encrypted_username TEXT NOT NULL,
         encrypted_content TEXT NOT NULL,
         encrypted_notes TEXT NOT NULL,
+        username_nonce TEXT NOT NULL,
         name_nonce TEXT NOT NULL,
         content_nonce TEXT NOT NULL,
         notes_nonce TEXT NOT NULL,
