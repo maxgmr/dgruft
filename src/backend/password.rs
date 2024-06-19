@@ -201,3 +201,59 @@ impl Base64Password {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::account::Account;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_new_password() {
+        let my_account = Account::new("my_account", "my_password").unwrap();
+        let my_fields = my_account.unlock("my_password").unwrap();
+
+        let my_password = Password::new(
+            my_fields.username(),
+            my_fields.key(),
+            "My Schploggy Account",
+            "my_schploggy_account",
+            "ILoveSchploggy!123",
+            "Security Question: My father's middle name is Bob.",
+        )
+        .unwrap();
+
+        assert_eq!(my_fields.username(), my_password.owner_username());
+        assert_eq!(
+            b"My Schploggy Account",
+            &my_password
+                .encrypted_name()
+                .decrypt(my_fields.key())
+                .unwrap()[..]
+        );
+        assert_eq!(
+            b"my_schploggy_account",
+            &my_password
+                .encrypted_username()
+                .decrypt(my_fields.key())
+                .unwrap()[..]
+        );
+        assert_eq!(
+            b"ILoveSchploggy!123",
+            &my_password
+                .encrypted_content()
+                .decrypt(my_fields.key())
+                .unwrap()[..]
+        );
+        assert_eq!(
+            b"Security Question: My father's middle name is Bob.",
+            &my_password
+                .encrypted_notes()
+                .decrypt(my_fields.key())
+                .unwrap()[..]
+        );
+    }
+
+    #[test]
+    fn test_to_from_b64() {}
+}
