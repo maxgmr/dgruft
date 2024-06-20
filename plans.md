@@ -1,6 +1,7 @@
 # Planned Features
 
 - Change password
+- Edit in default text editor
 
 # Possible Features
 

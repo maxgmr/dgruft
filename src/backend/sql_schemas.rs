@@ -11,23 +11,28 @@ pub const CREATE_USER_CREDENTIALS: &str = "
 
 pub const CREATE_PASSWORDS: &str = "
     CREATE TABLE IF NOT EXISTS passwords (
+        owner_username TEXT NOT NULL,
         encrypted_name TEXT NOT NULL,
+        encrypted_username TEXT NOT NULL,
         encrypted_content TEXT NOT NULL,
         encrypted_notes TEXT NOT NULL,
-        owner_username TEXT NOT NULL,
-        nonce TEXT NOT NULL,
+        username_nonce TEXT NOT NULL,
+        name_nonce TEXT NOT NULL,
+        content_nonce TEXT NOT NULL,
+        notes_nonce TEXT NOT NULL,
         FOREIGN KEY (owner_username)
             REFERENCES user_credentials(username)
             ON DELETE CASCADE,
-        PRIMARY KEY(encrypted_name, owner_username)
+        PRIMARY KEY(owner_username, encrypted_name)
     )
 ";
 
 pub const CREATE_FILES: &str = "
     CREATE TABLE IF NOT EXISTS files (
-        path TEXT NOT NULL PRIMARY KEY,
+        encrypted_path TEXT NOT NULL PRIMARY KEY,
         owner_username TEXT NOT NULL,
-        nonce TEXT NOT NULL,
+        content_nonce TEXT NOT NULL,
+        path_nonce TEXT NOT NULL,
         FOREIGN KEY (owner_username)
             REFERENCES user_credentials(username)
             ON DELETE CASCADE

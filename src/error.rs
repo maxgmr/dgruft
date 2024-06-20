@@ -1,6 +1,5 @@
 //! All the different backend errors that dgruft can experience, meant to be displayed in the
 //! frontend.
-
 use core::fmt;
 
 /// A list of all the handled dgruft errors.

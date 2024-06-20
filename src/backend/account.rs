@@ -32,11 +32,10 @@ impl Account {
 
     /// Load an [Account] from a [Base64Account]— a set of base-64-encoded strings.
     pub fn from_b64(b64_account: Base64Account) -> Result<Self, Error> {
-        let username = match std::str::from_utf8(&helpers::b64_to_bytes(&b64_account.b64_username)?)
-        {
-            Ok(username) => username.to_owned(),
-            Err(_) => return Err(Error::Utf8FromBytesError(String::from("username"))),
-        };
+        let username = helpers::bytes_to_utf8(
+            &helpers::b64_to_bytes(&b64_account.b64_username)?,
+            "username",
+        )?;
         let password_salt: [u8; 64] =
             helpers::b64_to_fixed(b64_account.b64_password_salt, "b64_password_salt")?;
         let dbl_hashed_password = Hashed::from_b64(
@@ -100,7 +99,7 @@ impl Account {
 
     /// Get all fields of this [Account], including the secure ones. Use with caution and
     /// restraint!
-    pub fn unlock(&self, password: String) -> Result<SecureFields, Error> {
+    pub fn unlock(&self, password: &str) -> Result<SecureFields, Error> {
         let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
         let dbl_hashed_password =
             Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
@@ -118,7 +117,7 @@ impl Account {
 
             Ok(SecureFields {
                 username: self.username().to_owned(),
-                password,
+                password: password.to_owned(),
                 hashed_password,
                 dbl_hashed_password,
                 key,
@@ -169,68 +168,30 @@ impl SecureFields {
 /// An [Account] converted for base-64 storage.
 #[derive(Debug)]
 pub struct Base64Account {
-    b64_username: String,
-    b64_password_salt: String,
-    b64_dbl_hashed_password_hash: String,
-    b64_dbl_hashed_password_salt: String,
-    b64_encrypted_key_ciphertext: String,
-    b64_encrypted_key_nonce: String,
+    /// Account username in base-64 format.
+    pub b64_username: String,
+    /// Account password salt in base-64 format.
+    pub b64_password_salt: String,
+    /// Account double-hashed password hash in base-64 format.
+    pub b64_dbl_hashed_password_hash: String,
+    /// Account double-hashed password salt in base-64 format.
+    pub b64_dbl_hashed_password_salt: String,
+    /// Account encrypted key ciphertext in base-64 format.
+    pub b64_encrypted_key_ciphertext: String,
+    /// Account encrypted key nonce in base-64 format.
+    pub b64_encrypted_key_nonce: String,
 }
 impl Base64Account {
-    /// Create a new [Base64Account].
-    pub fn new(
-        b64_username: String,
-        b64_password_salt: String,
-        b64_dbl_hashed_password_hash: String,
-        b64_dbl_hashed_password_salt: String,
-        b64_encrypted_key_ciphertext: String,
-        b64_encrypted_key_nonce: String,
-    ) -> Self {
-        Self {
-            b64_username,
-            b64_password_salt,
-            b64_dbl_hashed_password_hash,
-            b64_dbl_hashed_password_salt,
-            b64_encrypted_key_ciphertext,
-            b64_encrypted_key_nonce,
-        }
-    }
-
     /// Output fields as tuple.
     pub fn as_tuple(&self) -> (&str, &str, &str, &str, &str, &str) {
         (
-            self.b64_username(),
-            self.b64_password_salt(),
-            self.b64_dbl_hashed_password_hash(),
-            self.b64_dbl_hashed_password_salt(),
-            self.b64_encrypted_key_ciphertext(),
-            self.b64_encrypted_key_nonce(),
+            &self.b64_username,
+            &self.b64_password_salt,
+            &self.b64_dbl_hashed_password_hash,
+            &self.b64_dbl_hashed_password_salt,
+            &self.b64_encrypted_key_ciphertext,
+            &self.b64_encrypted_key_nonce,
         )
-    }
-
-    /// Return the base-64 username of this [Base64Account].
-    pub fn b64_username(&self) -> &str {
-        &self.b64_username
-    }
-    /// Return the base-64 password salt of this [Base64Account].
-    pub fn b64_password_salt(&self) -> &str {
-        &self.b64_password_salt
-    }
-    /// Return the base-64 double-hashed password hash of this [Base64Account].
-    pub fn b64_dbl_hashed_password_hash(&self) -> &str {
-        &self.b64_dbl_hashed_password_hash
-    }
-    /// Return the base-64 double-hashed password salt of this [Base64Account].
-    pub fn b64_dbl_hashed_password_salt(&self) -> &str {
-        &self.b64_dbl_hashed_password_salt
-    }
-    /// Return the base-64 encrypted key ciphertext of this [Base64Account].
-    pub fn b64_encrypted_key_ciphertext(&self) -> &str {
-        &self.b64_encrypted_key_ciphertext
-    }
-    /// Return the base-64 encrypted key nonce of this [Base64Account].
-    pub fn b64_encrypted_key_nonce(&self) -> &str {
-        &self.b64_encrypted_key_nonce
     }
 }
 
@@ -244,16 +205,14 @@ mod tests {
         let my_account = Account::new("my_account", "my_password").unwrap();
         assert!(my_account.check_password_match("my_password"));
 
-        let incorrect_attempt = my_account
-            .unlock(String::from("not my password"))
-            .unwrap_err();
+        let incorrect_attempt = my_account.unlock("not my password").unwrap_err();
         if let Error::IncorrectPasswordError = incorrect_attempt {
         } else {
             dbg!(&incorrect_attempt);
             panic!("Wrong error type");
         }
 
-        let my_fields = my_account.unlock(String::from("my_password")).unwrap();
+        let my_fields = my_account.unlock("my_password").unwrap();
         let hashed_password = Hashed::from_salt(b"my_password", my_account.password_salt());
         let dbl_hashed_password = Hashed::from_salt(
             hashed_password.hash(),
@@ -311,22 +270,22 @@ mod tests {
         .unwrap();
 
         let my_account_b64 = my_account.to_b64();
-        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username());
+        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username);
         assert_eq!(
             dbl_hashed_password.hash_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_hash()
+            my_account_b64.b64_dbl_hashed_password_hash
         );
         assert_eq!(
             dbl_hashed_password.salt_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_salt()
+            my_account_b64.b64_dbl_hashed_password_salt
         );
         assert_eq!(
             encrypted_key.ciphertext_as_b64(),
-            my_account_b64.b64_encrypted_key_ciphertext()
+            my_account_b64.b64_encrypted_key_ciphertext
         );
         assert_eq!(
             encrypted_key.nonce_as_b64(),
-            my_account_b64.b64_encrypted_key_nonce()
+            my_account_b64.b64_encrypted_key_nonce
         );
 
         let my_account_2 = Account::from_b64(my_account_b64).unwrap();
