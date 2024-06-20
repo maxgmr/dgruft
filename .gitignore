@@ -11,6 +11,3 @@ target/
 
 # Added by cargo
 /target
-
-# Ignore SQLite DBs
-/dbs/*
