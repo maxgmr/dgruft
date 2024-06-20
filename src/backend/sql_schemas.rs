@@ -30,11 +30,12 @@ pub const CREATE_PASSWORDS: &str = "
 pub const CREATE_FILES: &str = "
     CREATE TABLE IF NOT EXISTS files (
         encrypted_path TEXT NOT NULL PRIMARY KEY,
+        path_nonce TEXT NOT NULL,
         owner_username TEXT NOT NULL,
         content_nonce TEXT NOT NULL,
-        path_nonce TEXT NOT NULL,
         FOREIGN KEY (owner_username)
             REFERENCES user_credentials(username)
             ON DELETE CASCADE
     )
 ";
+

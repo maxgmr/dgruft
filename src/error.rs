@@ -1,6 +1,7 @@
 //! All the different backend errors that dgruft can experience, meant to be displayed in the
 //! frontend.
 use core::fmt;
+use std::path::PathBuf;
 
 /// A list of all the handled dgruft errors.
 #[derive(Clone, Debug)]
@@ -17,6 +18,8 @@ pub enum Error {
     EncryptionError(String),
     /// Problem decrypting something.
     DecryptionError(String),
+    /// Tried to create file at a path that already exists.
+    FileAlreadyExistsError(PathBuf),
     /// Generic error thrown when there is no [Error] enum value. Should only be used for errors
     /// that should never occur.
     UnhandledError(String),
@@ -48,6 +51,9 @@ impl fmt::Display for Error {
             Error::DecryptionError(error_as_string) => {
                 format!("DecryptionError: {}", error_as_string)
             }
+            Error::FileAlreadyExistsError(path) => {
+                format!("FileAlreadyExistsError: Cannot create new file at \"{}\"— file already exists.", path.display())
+            }
             Error::UnhandledError(error_as_string) => {
                 format!("UnhandledError: {}", error_as_string)
             }
@@ -55,3 +61,4 @@ impl fmt::Display for Error {
         write!(f, "{}", message)
     }
 }
+
