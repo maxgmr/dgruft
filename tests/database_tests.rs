@@ -149,48 +149,46 @@ fn database_tests() {
         encrypted: &encrypted::Encrypted,
         key: &[u8; 32],
     ) {
+        let decrypted_text =
+            helpers::bytes_to_utf8(&encrypted.decrypt(key).unwrap(), "decrypted").unwrap();
+        dbg!(unencrypted_str, decrypted_text);
         assert_eq!(unencrypted_str.as_bytes(), encrypted.decrypt(key).unwrap());
     }
 
-    assert_eq!(username_1, loaded_passwords_1[0].owner_username());
-    assert_encrypted_eq(p_1_1_name, loaded_passwords_1[0].encrypted_name(), key_1);
-    assert_encrypted_eq(
-        p_1_1_username,
-        loaded_passwords_1[0].encrypted_username(),
-        key_1,
-    );
-    assert_encrypted_eq(
-        p_1_1_content,
-        loaded_passwords_1[0].encrypted_content(),
-        key_1,
-    );
-    assert_encrypted_eq(p_1_1_notes, loaded_passwords_1[0].encrypted_notes(), key_1);
+    fn get_with_name<'a>(
+        desired_name: &str,
+        key: &[u8; 32],
+        passwords: &'a [password::Password],
+    ) -> &'a password::Password {
+        passwords
+            .iter()
+            .find(|pwd| {
+                helpers::bytes_to_utf8(&pwd.encrypted_name().decrypt(key).unwrap(), desired_name)
+                    .unwrap()
+                    == desired_name
+            })
+            .unwrap()
+    }
 
-    assert_eq!(username_2, loaded_passwords_2[0].owner_username());
-    assert_encrypted_eq(p_2_1_name, loaded_passwords_2[0].encrypted_name(), key_2);
-    assert_encrypted_eq(
-        p_2_1_username,
-        loaded_passwords_2[0].encrypted_username(),
-        key_2,
-    );
-    assert_encrypted_eq(
-        p_2_1_content,
-        loaded_passwords_2[0].encrypted_content(),
-        key_2,
-    );
-    assert_encrypted_eq(p_2_1_notes, loaded_passwords_2[0].encrypted_notes(), key_2);
+    let loaded_p_1_1 = get_with_name(p_1_1_name, key_1, &loaded_passwords_1);
+    let loaded_p_2_1 = get_with_name(p_2_1_name, key_2, &loaded_passwords_2);
+    let loaded_p_2_2 = get_with_name(p_2_2_name, key_2, &loaded_passwords_2);
 
-    assert_eq!(username_2, loaded_passwords_2[1].owner_username());
-    assert_encrypted_eq(p_2_2_name, loaded_passwords_2[1].encrypted_name(), key_2);
-    assert_encrypted_eq(
-        p_2_2_username,
-        loaded_passwords_2[1].encrypted_username(),
-        key_2,
-    );
-    assert_encrypted_eq(
-        p_2_2_content,
-        loaded_passwords_2[1].encrypted_content(),
-        key_2,
-    );
-    assert_encrypted_eq(p_2_2_notes, loaded_passwords_2[1].encrypted_notes(), key_2);
+    assert_eq!(username_1, loaded_p_1_1.owner_username());
+    assert_encrypted_eq(p_1_1_name, loaded_p_1_1.encrypted_name(), key_1);
+    assert_encrypted_eq(p_1_1_username, loaded_p_1_1.encrypted_username(), key_1);
+    assert_encrypted_eq(p_1_1_content, loaded_p_1_1.encrypted_content(), key_1);
+    assert_encrypted_eq(p_1_1_notes, loaded_p_1_1.encrypted_notes(), key_1);
+
+    assert_eq!(username_2, loaded_p_2_1.owner_username());
+    assert_encrypted_eq(p_2_1_name, loaded_p_2_1.encrypted_name(), key_2);
+    assert_encrypted_eq(p_2_1_username, loaded_p_2_1.encrypted_username(), key_2);
+    assert_encrypted_eq(p_2_1_content, loaded_p_2_1.encrypted_content(), key_2);
+    assert_encrypted_eq(p_2_1_notes, loaded_p_2_1.encrypted_notes(), key_2);
+
+    assert_eq!(username_2, loaded_p_2_2.owner_username());
+    assert_encrypted_eq(p_2_2_name, loaded_p_2_2.encrypted_name(), key_2);
+    assert_encrypted_eq(p_2_2_username, loaded_p_2_2.encrypted_username(), key_2);
+    assert_encrypted_eq(p_2_2_content, loaded_p_2_2.encrypted_content(), key_2);
+    assert_encrypted_eq(p_2_2_notes, loaded_p_2_2.encrypted_notes(), key_2);
 }
