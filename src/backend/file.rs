@@ -1,6 +1,5 @@
 //! Functionality related to reading and writing encrypted files.
 use std::{
-    ffi::OsStr,
     fmt::Display,
     fs::{File, OpenOptions},
     io::{ErrorKind, Read, Write},
@@ -134,12 +133,30 @@ impl FileData {
         }
         Ok(*encrypted_content.nonce())
     }
+
+    // GETTERS
+
+    /// Return the encrypted path of this [FileData].
+    pub fn encrypted_path(&self) -> &Encrypted {
+        &self.encrypted_path
+    }
+
+    /// Return the owner username of this [FileData].
+    pub fn owner_username(&self) -> &str {
+        &self.owner_username
+    }
+
+    /// Return the nonce used to encrypt the content of this [FileData].
+    pub fn content_nonce(&self) -> &[u8; 12] {
+        &self.content_nonce
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::backend::account::Account;
+    use std::process::Command;
 
     const TEST_USERNAME: &str = "my_account";
     const TEST_PASSWORD: &str = "my_password";
@@ -151,8 +168,15 @@ mod tests {
 
         Don't tell anybody!!!!
         ";
+    const TEST_FILE_PATH: &str = "test_files/testfile";
 
-    // TODO: save file, write to file, encrypt, decrypt, read file
+    fn cleanup_test_file() {
+        Command::new("rm")
+            .arg(TEST_FILE_PATH)
+            .status()
+            .expect("failed");
+    }
+
     #[test]
     fn test_file_read_write() {
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
@@ -161,7 +185,7 @@ mod tests {
             &my_account,
             TEST_PASSWORD,
             TEST_CONTENT.as_bytes(),
-            "test_files/testfile",
+            TEST_FILE_PATH,
         )
         .unwrap();
         let content = my_file.open_decrypted(unlocked.key()).unwrap();
@@ -170,5 +194,6 @@ mod tests {
             TEST_CONTENT,
             helpers::bytes_to_utf8(&content, "test_content").unwrap()
         );
+        cleanup_test_file();
     }
 }
