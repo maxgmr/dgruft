@@ -156,7 +156,7 @@ impl FileData {
 mod tests {
     use super::*;
     use crate::backend::account::Account;
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
     use std::process::Command;
 
     const TEST_USERNAME: &str = "my_account";
@@ -223,7 +223,7 @@ mod tests {
             test_file,
         )
         .unwrap();
-        let content_other_account = my_file.open_decrypted(other_unlocked.key()).unwrap_err();
+        my_file.open_decrypted(other_unlocked.key()).unwrap_err();
         cleanup_test_file(test_file);
     }
 }
