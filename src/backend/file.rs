@@ -156,6 +156,7 @@ impl FileData {
 mod tests {
     use super::*;
     use crate::backend::account::Account;
+    use pretty_assertions::{assert_eq, assert_ne};
     use std::process::Command;
 
     const TEST_USERNAME: &str = "my_account";
@@ -168,24 +169,21 @@ mod tests {
 
         Don't tell anybody!!!!
         ";
-    const TEST_FILE_PATH: &str = "test_files/testfile";
 
-    fn cleanup_test_file() {
-        Command::new("rm")
-            .arg(TEST_FILE_PATH)
-            .status()
-            .expect("failed");
+    fn cleanup_test_file(path: &str) {
+        Command::new("rm").arg(path).status().expect("failed");
     }
 
     #[test]
     fn test_file_read_write() {
+        let test_file = "test_files/testfile1";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
         let my_file = FileData::new_with_content(
             &my_account,
             TEST_PASSWORD,
             TEST_CONTENT.as_bytes(),
-            TEST_FILE_PATH,
+            test_file,
         )
         .unwrap();
         let content = my_file.open_decrypted(unlocked.key()).unwrap();
@@ -194,6 +192,38 @@ mod tests {
             TEST_CONTENT,
             helpers::bytes_to_utf8(&content, "test_content").unwrap()
         );
-        cleanup_test_file();
+        cleanup_test_file(test_file);
+    }
+
+    #[test]
+    fn test_already_exists() {
+        let test_file = "test_files/testfile2";
+        let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
+        let other_account = Account::new("123", "456").unwrap();
+        FileData::new(&my_account, TEST_PASSWORD, test_file).unwrap();
+        let dupe = FileData::new(&other_account, "456", test_file).unwrap_err();
+
+        if let Error::FileAlreadyExistsError(_) = dupe {
+        } else {
+            panic!("Wrong error type");
+        }
+        cleanup_test_file(test_file);
+    }
+
+    #[test]
+    fn test_another_account_open() {
+        let test_file = "test_files/testfile3";
+        let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
+        let other_account = Account::new("123", "456").unwrap();
+        let other_unlocked = other_account.unlock("456").unwrap();
+        let my_file = FileData::new_with_content(
+            &my_account,
+            TEST_PASSWORD,
+            TEST_CONTENT.as_bytes(),
+            test_file,
+        )
+        .unwrap();
+        let content_other_account = my_file.open_decrypted(other_unlocked.key()).unwrap_err();
+        cleanup_test_file(test_file);
     }
 }
