@@ -1,6 +1,6 @@
 [package]
 name = "dgruft"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Max Gilmour"]
 readme = "README.md"
@@ -12,9 +12,10 @@ aes-gcm = "0.10"
 base64ct = { version = "1.6", features = ["alloc"] }
 clap = "4.5"
 color-eyre = "0.6"
-crossterm = "0.27"
+crossterm = { version = "0.27", features = ["event-stream"] }
 directories = "5.0"
 edit = "0.1"
+futures = "0.3"
 pbkdf2 = "0.12"
 rand_chacha = "0.3"
 ratatui = { version = "0.26", features = ["serde"] }
@@ -23,6 +24,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 tokio = { version = "1.38", features = ["full"] }
+tokio-util = "0.7"
 toml = "0.8"
 
 [dev-dependencies]

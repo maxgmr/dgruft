@@ -20,6 +20,12 @@ pub enum Error {
     DecryptionError(String),
     /// Tried to create file at a path that already exists.
     FileAlreadyExistsError(PathBuf),
+    /// Tried to interact with a file with insufficient permissions.
+    PermissionDeniedError(PathBuf),
+    /// Tried to open a file that doesn't exist.
+    FileNotFoundError(PathBuf),
+    /// Tried to use non-UTF-8 file path.
+    NonUtf8FilePathError(String),
     /// Generic error thrown when there is no [Error] enum value. Should only be used for errors
     /// that should never occur.
     UnhandledError(String),
@@ -51,8 +57,26 @@ impl fmt::Display for Error {
             Error::DecryptionError(error_as_string) => {
                 format!("DecryptionError: {}", error_as_string)
             }
+            Error::FileNotFoundError(path) => {
+                format!(
+                    "FileNotFoundError: File at \"{}\" does not exist.",
+                    path.display()
+                )
+            }
             Error::FileAlreadyExistsError(path) => {
                 format!("FileAlreadyExistsError: Cannot create new file at \"{}\"— file already exists.", path.display())
+            }
+            Error::PermissionDeniedError(path) => {
+                format!(
+                    "PermissionDeniedError: Permission denied for path \"{}\".",
+                    path.display()
+                )
+            }
+            Error::NonUtf8FilePathError(var_name) => {
+                format!(
+                    "NonUtf8FilePathError: The path for \"{}\" is not UTF-8 encoded.",
+                    var_name
+                )
             }
             Error::UnhandledError(error_as_string) => {
                 format!("UnhandledError: {}", error_as_string)
@@ -61,4 +85,3 @@ impl fmt::Display for Error {
         write!(f, "{}", message)
     }
 }
-

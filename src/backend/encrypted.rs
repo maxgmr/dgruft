@@ -38,6 +38,14 @@ impl Encrypted {
         }
     }
 
+    /// Read an [Encrypted] from encrypted ciphertext.
+    pub fn from_bytes(ciphertext: &[u8], nonce: &[u8; 12]) -> Self {
+        Self {
+            ciphertext: ciphertext.to_vec(),
+            nonce: *nonce,
+        }
+    }
+
     /// Read an [Encrypted] from a base-64 string.
     pub fn from_b64(b64_ciphertext: &str, b64_nonce: &str) -> Result<Self, Error> {
         Ok(Self {
