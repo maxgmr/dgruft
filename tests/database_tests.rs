@@ -4,7 +4,10 @@ use dgruft::backend::*;
 use dgruft::helpers;
 
 #[test]
-fn database_tests() {
+fn file_tests() {}
+
+#[test]
+fn password_tests() {
     common::reset_test_db();
     let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
 

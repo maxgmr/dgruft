@@ -1,3 +1,5 @@
-fn main() {
-    println!("Hello, world! (graphically)")
+use color_eyre::eyre;
+
+fn main() -> eyre::Result<()> {
+    Ok(())
 }
