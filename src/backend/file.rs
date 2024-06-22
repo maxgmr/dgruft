@@ -91,6 +91,36 @@ impl FileData {
         encrypted_content.decrypt(key)
     }
 
+    /// Load [FileData] from [Base64FileData]— a set of base-64-encoded strings.
+    pub fn from_b64(b64_file_data: Base64FileData) -> Result<Self, Error> {
+        let encrypted_path = Encrypted::from_b64(
+            &b64_file_data.b64_encrypted_path,
+            &b64_file_data.b64_path_nonce,
+        )?;
+        let owner_username = helpers::bytes_to_utf8(
+            &helpers::b64_to_bytes(&b64_file_data.b64_owner_username)?,
+            "owner_username",
+        )?;
+        let content_nonce: [u8; 12] =
+            helpers::b64_to_fixed(b64_file_data.b64_content_nonce, "content_nonce")?;
+
+        Ok(Self {
+            encrypted_path,
+            owner_username,
+            content_nonce,
+        })
+    }
+
+    /// Convert this [FileData] to a [Base64FileData] for storage.
+    pub fn to_b64(&self) -> Base64FileData {
+        Base64FileData {
+            b64_encrypted_path: self.encrypted_path().ciphertext_as_b64(),
+            b64_path_nonce: self.encrypted_path().nonce_as_b64(),
+            b64_owner_username: helpers::bytes_to_b64(self.owner_username().as_bytes()),
+            b64_content_nonce: helpers::bytes_to_b64(self.content_nonce()),
+        }
+    }
+
     // Helper function to open file.
     fn open_file<P>(path: P) -> Result<File, Error>
     where
@@ -152,6 +182,30 @@ impl FileData {
     }
 }
 
+/// [FileData] converted for base-64 storage.
+#[derive(Debug)]
+pub struct Base64FileData {
+    /// Encrypted path in base-64 format.
+    pub b64_encrypted_path: String,
+    /// Encrypted path nonce in base-64 format.
+    pub b64_path_nonce: String,
+    /// Owner username in base-64 format.
+    pub b64_owner_username: String,
+    /// Encrypted content nonce in base-64 format.
+    pub b64_content_nonce: String,
+}
+impl Base64FileData {
+    /// Output fields as tuple.
+    pub fn as_tuple(&self) -> (&str, &str, &str, &str) {
+        (
+            &self.b64_encrypted_path,
+            &self.b64_path_nonce,
+            &self.b64_owner_username,
+            &self.b64_content_nonce,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,8 +250,33 @@ mod tests {
     }
 
     #[test]
-    fn test_already_exists() {
+    fn test_to_from_b64() {
         let test_file = "test_files/testfile2";
+        let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
+        let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
+        let my_file = FileData::new_with_content(
+            &my_account,
+            TEST_PASSWORD,
+            TEST_CONTENT.as_bytes(),
+            test_file,
+        )
+        .unwrap();
+
+        let my_b64_file = my_file.to_b64();
+        let my_loaded_file = FileData::from_b64(my_b64_file).unwrap();
+
+        let content = my_loaded_file.open_decrypted(unlocked.key()).unwrap();
+        assert_eq!(TEST_CONTENT.as_bytes(), content);
+        assert_eq!(
+            TEST_CONTENT,
+            helpers::bytes_to_utf8(&content, "test_content").unwrap()
+        );
+        cleanup_test_file(test_file);
+    }
+
+    #[test]
+    fn test_already_exists() {
+        let test_file = "test_files/testfile3";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let other_account = Account::new("123", "456").unwrap();
         FileData::new(&my_account, TEST_PASSWORD, test_file).unwrap();
@@ -212,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_another_account_open() {
-        let test_file = "test_files/testfile3";
+        let test_file = "test_files/testfile4";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let other_account = Account::new("123", "456").unwrap();
         let other_unlocked = other_account.unlock("456").unwrap();
