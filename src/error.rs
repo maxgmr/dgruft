@@ -85,3 +85,4 @@ impl fmt::Display for Error {
         write!(f, "{}", message)
     }
 }
+impl std::error::Error for Error {}
