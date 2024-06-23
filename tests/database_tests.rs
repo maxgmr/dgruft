@@ -90,6 +90,21 @@ fn file_tests() {
         helpers::bytes_to_utf8(&content_2, "content_2").unwrap(),
         file_2_content,
     );
+
+    // Ensure deletion works as intended.
+    db.delete_account(username).unwrap().unwrap();
+    assert!(db
+        .get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_1.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .is_none());
+    assert!(db
+        .get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_2.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -132,7 +147,7 @@ fn password_tests() {
 
     if db.get_b64_account("bleurgh").unwrap().is_none() {
     } else {
-        panic!("Should have returned None");
+        panic!("bleurgh should have returned None");
     };
 
     // Add some passwords for these accounts
@@ -280,4 +295,18 @@ fn password_tests() {
     assert_encrypted_eq(p_2_2_username, loaded_p_2_2.encrypted_username(), key_2);
     assert_encrypted_eq(p_2_2_content, loaded_p_2_2.encrypted_content(), key_2);
     assert_encrypted_eq(p_2_2_notes, loaded_p_2_2.encrypted_notes(), key_2);
+
+    // Check deletion works as intended.
+    db.delete_account(username_1).unwrap().unwrap();
+    if db.get_b64_account(username_1).unwrap().is_none() {
+    } else {
+        panic!("Failed to delete account_1 from database.");
+    };
+
+    if db.delete_account(username_1).unwrap().is_none() {
+    } else {
+        panic!("Duplicate delete should have returned None");
+    };
+
+    assert!(db.get_b64_passwords(username_1).unwrap().is_none());
 }

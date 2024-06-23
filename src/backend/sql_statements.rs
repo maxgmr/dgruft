@@ -22,6 +22,11 @@ pub const GET_ACCOUNT: &str = "
     WHERE username = ?1
 ";
 
+pub const DELETE_ACCOUNT: &str = "
+    DELETE FROM user_credentials
+    WHERE username = ?1
+";
+
 pub const INSERT_NEW_PASSWORD: &str = "
     INSERT INTO passwords (
         owner_username,
@@ -78,4 +83,3 @@ pub const GET_USER_FILES: &str = "
     FROM files
     WHERE owner_username = ?1
 ";
-

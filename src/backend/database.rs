@@ -118,6 +118,20 @@ impl Database {
         Ok(())
     }
 
+    /// Delete a given account from the `user_credentials` database table.
+    /// Matches the username of the account.
+    /// Return [`Ok<None>`] if no account with that username exists.
+    pub fn delete_account(&mut self, username: &str) -> rusqlite::Result<Option<()>> {
+        let num_rows = self
+            .connection
+            .execute(DELETE_ACCOUNT, [helpers::bytes_to_b64(username.as_bytes())])?;
+        if num_rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
+    }
+
     /// Retrieve file data from the database as a [Base64FileData].
     /// Return [`Ok<None>`] if no file with that path exists.
     /// Return [Err] on a database error.
