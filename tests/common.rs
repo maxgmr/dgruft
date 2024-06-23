@@ -1,7 +1,11 @@
 // Common functionality for integration tests
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 pub const TEST_DB_PATH: &str = "dbs/dgruft-test.db";
+
+pub fn get_test_dir() -> PathBuf {
+    PathBuf::from("test_files")
+}
 
 pub fn reset_test_db() {
     Command::new("rm")
@@ -13,3 +17,4 @@ pub fn reset_test_db() {
         .status()
         .expect("failed");
 }
+

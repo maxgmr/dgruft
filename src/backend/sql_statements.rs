@@ -54,20 +54,28 @@ pub const GET_USER_PASSWORDS: &str = "
 
 pub const INSERT_NEW_FILE: &str = "
     INSERT INTO files (
-        encrypted_path,
+        path,
         owner_username,
-        content_nonce,
-        path_nonce
+        content_nonce
     )
-    VALUES (?1, ?2, ?3, ?4)
+    VALUES (?1, ?2, ?3)
+";
+
+pub const GET_FILE: &str = "
+    SELECT
+        path,
+        owner_username,
+        content_nonce
+    FROM files
+    WHERE path = ?1
 ";
 
 pub const GET_USER_FILES: &str = "
     SELECT
-        encrypted_path,
+        path,
         owner_username,
-        content_nonce,
-        path_nonce
+        content_nonce
     FROM files
     WHERE owner_username = ?1
 ";
+

@@ -1,10 +1,96 @@
 mod common;
 
+use account::Account;
 use dgruft::backend::*;
+use dgruft::error::Error;
 use dgruft::helpers;
+use file::FileData;
+
+// Run with `cargo test --test '*' -- --test-threads=1`
 
 #[test]
-fn file_tests() {}
+fn file_tests() {
+    common::reset_test_db();
+    let _ = std::fs::remove_file("test_files/my_file");
+    let _ = std::fs::remove_file("test_files/my_other_file");
+    let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
+
+    let file_name_1 = "my_file";
+    let mut file_path_1 = common::get_test_dir();
+    file_path_1.push(file_name_1);
+
+    let file_name_2 = "my_other_file";
+    let mut file_path_2 = common::get_test_dir();
+    file_path_2.push(file_name_2);
+
+    let username = "my_account_1";
+    let password = "this is my passphrase. open sesame!";
+    let account = Account::new(username, password).unwrap();
+    db.add_new_account(account.to_b64()).unwrap();
+    let account = Account::from_b64(db.get_b64_account(username).unwrap().unwrap()).unwrap();
+    let sec_fields = account.unlock(password).unwrap();
+
+    let file_1 =
+        FileData::new_with_key(sec_fields.username(), sec_fields.key(), &file_path_1).unwrap();
+    db.add_new_file_data(file_1.to_b64().unwrap()).unwrap();
+
+    // Ensure that duplicate files get rejected, even if they come from other accounts.
+    let other_username = "other_account";
+    let other_password = "other_password";
+    let other_account = Account::new(other_username, other_password).unwrap();
+    db.add_new_account(other_account.to_b64()).unwrap();
+    let other_account =
+        Account::from_b64(db.get_b64_account(other_username).unwrap().unwrap()).unwrap();
+    let other_sec_fields = other_account.unlock(other_password).unwrap();
+    let dupe_file = FileData::new_with_key(
+        other_sec_fields.username(),
+        other_sec_fields.key(),
+        &file_path_1,
+    )
+    .unwrap_err();
+    if let Error::FileAlreadyExistsError(_) = dupe_file {
+    } else {
+        panic!("Wrong error type");
+    }
+
+    let file_2_content = "testing, testing 123";
+    let file_2 = FileData::new_with_content_and_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_2_content.as_bytes(),
+        &file_path_2,
+    )
+    .unwrap();
+    db.add_new_file_data(file_2.to_b64().unwrap()).unwrap();
+
+    // Load files from database
+    println!("{}", file_path_1.to_str().unwrap());
+    let file_1 = FileData::from_b64(
+        db.get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_1.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .unwrap(),
+    )
+    .unwrap();
+    let file_2 = FileData::from_b64(
+        db.get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_2.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .unwrap(),
+    )
+    .unwrap();
+
+    // Ensure files content O.K.
+    let content_1 = file_1.open_decrypted(sec_fields.key()).unwrap();
+    assert_eq!(content_1, b"");
+    let content_2 = file_2.open_decrypted(sec_fields.key()).unwrap();
+    assert_eq!(
+        helpers::bytes_to_utf8(&content_2, "content_2").unwrap(),
+        file_2_content,
+    );
+}
 
 #[test]
 fn password_tests() {

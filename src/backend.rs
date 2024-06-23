@@ -1,10 +1,12 @@
 //! Backend API.
 use std::{
+    ffi::OsString,
     fs::{create_dir, remove_dir_all},
     path::PathBuf,
 };
 
 use color_eyre::eyre;
+use file::FileData;
 
 pub mod account;
 pub mod database;
@@ -15,8 +17,8 @@ pub mod password;
 mod sql_schemas;
 mod sql_statements;
 
-use crate::helpers;
-use account::Account;
+use crate::{error::Error, helpers};
+use account::{Account, SecureFields};
 use database::Database;
 
 const VERBOSE: bool = true;
@@ -40,6 +42,15 @@ fn load_db() -> eyre::Result<Database> {
         println!("Loaded database @ {:?}.", db.path());
     }
     Ok(db)
+}
+
+fn login(db: &mut Database, username: &str, password: &str) -> eyre::Result<SecureFields> {
+    if let Some(b64account) = db.get_b64_account(username)? {
+        let db_entry = Account::from_b64(b64account)?;
+        Ok(db_entry.unlock(password)?)
+    } else {
+        Err(Error::AccountNotFoundError(username.to_owned()).into())
+    }
 }
 
 /// Create a new account and store it in the database.
@@ -82,8 +93,32 @@ pub fn delete_account(username: String, password: String, force: bool) -> eyre::
     // Delete the directory where this account's files were stored
     let acc_dir = acc_path(&username);
     remove_dir_all(&acc_dir)?;
+
+    // Delete this account's database entry
+    // TODO
+
     if VERBOSE {
         println!("Deleted directory @ {:?}.", acc_dir);
     }
+    Ok(())
+}
+
+/// Create a new file, add its data to the database, and store it in the user directory.
+pub fn new_file(username: String, password: String, file: OsString) -> eyre::Result<()> {
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Get user directory.
+    let mut acc_dir = acc_path(&username);
+    acc_dir.push(file);
+
+    // Create new file.
+    let file_data =
+        FileData::new_with_key(unlocked_account.username(), unlocked_account.key(), acc_dir)?;
+
+    // Add to database— if err then undo file creation.
+    // TODO: Create function to insert new file data
+
     Ok(())
 }

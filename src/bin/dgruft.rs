@@ -31,7 +31,9 @@ fn match_args(args: Cli) -> eyre::Result<()> {
             username,
             password,
             file,
-        } => {}
+        } => {
+            backend::new_file(username, password, file)?;
+        }
         Commands::Edit {
             username,
             password,

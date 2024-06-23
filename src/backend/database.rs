@@ -1,12 +1,14 @@
 //! All functionality related to the [SQLite](https://www.sqlite.org/about.html) database dgruft uses for persistence.
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::usize;
 
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
 use crate::{
     backend::{
-        account::Base64Account, password::Base64Password, sql_schemas::*, sql_statements::*,
+        account::Base64Account, file::Base64FileData, password::Base64Password, sql_schemas::*,
+        sql_statements::*,
     },
     helpers,
 };
@@ -116,6 +118,35 @@ impl Database {
         Ok(())
     }
 
+    /// Retrieve file data from the database as a [Base64FileData].
+    /// Return [`Ok<None>`] if no file with that path exists.
+    /// Return [Err] on a database error.
+    pub fn get_b64_file_data(&self, path_string: &str) -> rusqlite::Result<Option<Base64FileData>> {
+        let mut statement = self.connection.prepare(GET_FILE)?;
+
+        let file_data_result = statement.query_row([path_string], |row| {
+            Ok(Base64FileData {
+                b64_path: row.get::<usize, String>(0)?,
+                b64_owner_username: row.get::<usize, String>(1)?,
+                b64_content_nonce: row.get::<usize, String>(2)?,
+            })
+        });
+
+        match file_data_result {
+            Ok(file_data) => Ok(Some(file_data)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Add [Base64FileData] to the `files` database table.
+    /// Return [Err] if that file path already exists.
+    pub fn add_new_file_data(&mut self, b64_file_data: Base64FileData) -> rusqlite::Result<()> {
+        self.connection
+            .execute(INSERT_NEW_FILE, b64_file_data.as_tuple())?;
+        Ok(())
+    }
+
     /// Delete the contents of the given table.
     /// Return [Err] if that table does not exist.
     pub fn truncate_table(&mut self, table_name: &str) -> rusqlite::Result<()> {
@@ -148,4 +179,3 @@ mod tests {
         }
     }
 }
-

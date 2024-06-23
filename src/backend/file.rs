@@ -1,6 +1,5 @@
 //! Functionality related to reading and writing encrypted files.
 use std::{
-    fmt::Display,
     fs::{File, OpenOptions},
     io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
@@ -15,7 +14,7 @@ use crate::{
 /// Metadata for an encrypted file accessible through `dgruft`.
 #[derive(Debug)]
 pub struct FileData {
-    encrypted_path: Encrypted,
+    path: PathBuf,
     owner_username: String,
     content_nonce: [u8; 12],
 }
@@ -51,7 +50,7 @@ impl FileData {
     {
         // Reject non-UTF-8-encodable paths.
         // WARNING: May not work on Windows at all.
-        let path_str = match path.as_ref().to_str() {
+        match path.as_ref().to_str() {
             Some(path_str) => path_str,
             None => return Err(Error::NonUtf8FilePathError("new_file_data_path".to_owned())),
         };
@@ -70,9 +69,8 @@ impl FileData {
             },
         };
 
-        let encrypted_path = Encrypted::new(path_str.as_bytes(), key)?;
         Ok(Self {
-            encrypted_path,
+            path: PathBuf::from(path.as_ref()),
             owner_username: username.to_owned(),
             content_nonce,
         })
@@ -98,12 +96,6 @@ impl FileData {
     /// is then re-encrypted and saved after editing.
     pub fn edit(&mut self, key: &[u8; 32]) -> Result<(), Error> {
         let decrypted_bytes = self.open_decrypted(key)?;
-        // let decrypted_string = helpers::bytes_to_utf8(&decrypted_bytes, "edit_file")?;
-        let decrypted_path_bytes = self.encrypted_path.decrypt(key)?;
-        let decrypted_path_buf = PathBuf::from(helpers::bytes_to_utf8(
-            &decrypted_path_bytes,
-            "decrypted_path",
-        )?);
 
         let edited_bytes = match edit::edit_bytes(decrypted_bytes) {
             Ok(bytes) => bytes,
@@ -112,13 +104,13 @@ impl FileData {
                     return Err(Error::Utf8FromBytesError("edit_file".to_owned()));
                 }
                 ErrorKind::NotFound => {
-                    return Err(Error::FileNotFoundError(decrypted_path_buf.clone()));
+                    return Err(Error::FileNotFoundError(self.path.clone()));
                 }
                 _ => return Err(Error::UnhandledError(err.to_string())),
             },
         };
 
-        let content_nonce = Self::encrypt_then_write(decrypted_path_buf, &edited_bytes, key)?;
+        let content_nonce = Self::encrypt_then_write(&self.path, &edited_bytes, key)?;
 
         self.content_nonce = content_nonce;
 
@@ -127,15 +119,12 @@ impl FileData {
 
     /// Open, then decrypt, the file at the path defined by this [FileData].
     pub fn open_decrypted(&self, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
-        let decrypted_path = self.encrypted_path.decrypt(key)?;
-        let mut file = Self::open_file(helpers::bytes_to_utf8(&decrypted_path, "decrypted_path")?)?;
+        let mut file = Self::open_file(&self.path)?;
         let mut encrypted_bytes: Vec<u8> = vec![];
         if let Err(err) = file.read_to_end(&mut encrypted_bytes) {
             match err.kind() {
                 ErrorKind::PermissionDenied => {
-                    return Err(Error::PermissionDeniedError(PathBuf::from(
-                        helpers::bytes_to_utf8(&decrypted_path, "decrypted_path")?,
-                    )));
+                    return Err(Error::PermissionDeniedError(self.path.clone()));
                 }
                 _ => return Err(Error::UnhandledError(err.to_string())),
             }
@@ -146,10 +135,11 @@ impl FileData {
 
     /// Load [FileData] from [Base64FileData]— a set of base-64-encoded strings.
     pub fn from_b64(b64_file_data: Base64FileData) -> Result<Self, Error> {
-        let encrypted_path = Encrypted::from_b64(
-            &b64_file_data.b64_encrypted_path,
-            &b64_file_data.b64_path_nonce,
-        )?;
+        // WARNING: May not work on Windows at all.
+        let path = PathBuf::from(helpers::bytes_to_utf8(
+            &helpers::b64_to_bytes(&b64_file_data.b64_path)?,
+            "path",
+        )?);
         let owner_username = helpers::bytes_to_utf8(
             &helpers::b64_to_bytes(&b64_file_data.b64_owner_username)?,
             "owner_username",
@@ -158,20 +148,19 @@ impl FileData {
             helpers::b64_to_fixed(b64_file_data.b64_content_nonce, "content_nonce")?;
 
         Ok(Self {
-            encrypted_path,
+            path,
             owner_username,
             content_nonce,
         })
     }
 
     /// Convert this [FileData] to a [Base64FileData] for storage.
-    pub fn to_b64(&self) -> Base64FileData {
-        Base64FileData {
-            b64_encrypted_path: self.encrypted_path().ciphertext_as_b64(),
-            b64_path_nonce: self.encrypted_path().nonce_as_b64(),
+    pub fn to_b64(&self) -> Option<Base64FileData> {
+        Some(Base64FileData {
+            b64_path: helpers::bytes_to_b64(self.path().to_str()?.as_bytes()),
             b64_owner_username: helpers::bytes_to_b64(self.owner_username().as_bytes()),
             b64_content_nonce: helpers::bytes_to_b64(self.content_nonce()),
-        }
+        })
     }
 
     // Helper function to open file.
@@ -219,9 +208,9 @@ impl FileData {
 
     // GETTERS
 
-    /// Return the encrypted path of this [FileData].
-    pub fn encrypted_path(&self) -> &Encrypted {
-        &self.encrypted_path
+    /// Return the path of this [FileData].
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Return the owner username of this [FileData].
@@ -238,10 +227,8 @@ impl FileData {
 /// [FileData] converted for base-64 storage.
 #[derive(Debug)]
 pub struct Base64FileData {
-    /// Encrypted path in base-64 format.
-    pub b64_encrypted_path: String,
-    /// Encrypted path nonce in base-64 format.
-    pub b64_path_nonce: String,
+    /// File path in base-64 format.
+    pub b64_path: String,
     /// Owner username in base-64 format.
     pub b64_owner_username: String,
     /// Encrypted content nonce in base-64 format.
@@ -249,10 +236,9 @@ pub struct Base64FileData {
 }
 impl Base64FileData {
     /// Output fields as tuple.
-    pub fn as_tuple(&self) -> (&str, &str, &str, &str) {
+    pub fn as_tuple(&self) -> (&str, &str, &str) {
         (
-            &self.b64_encrypted_path,
-            &self.b64_path_nonce,
+            &self.b64_path,
             &self.b64_owner_username,
             &self.b64_content_nonce,
         )
@@ -334,7 +320,7 @@ Don't tell anybody!!!!";
         )
         .unwrap();
 
-        let my_b64_file = my_file.to_b64();
+        let my_b64_file = my_file.to_b64().unwrap();
         let my_loaded_file = FileData::from_b64(my_b64_file).unwrap();
 
         let content = my_loaded_file.open_decrypted(unlocked.key()).unwrap();
