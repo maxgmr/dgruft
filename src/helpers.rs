@@ -1,8 +1,87 @@
 //! Small, general helper functions.
+use std::{env, path::PathBuf};
+
 use base64ct::{Base64, Encoding};
+use directories::ProjectDirs;
 use regex::Regex;
 
 use crate::error::Error;
+
+const VERSION_MESSAGE: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " -",
+    env!("VERGEN_GIT_DESCRIBE"),
+    " (",
+    env!("VERGEN_BUILD_DATE"),
+    ")"
+);
+
+/// Get the version of the program as a string.
+pub fn version() -> String {
+    let author = clap::crate_authors!();
+    format!(
+        "\
+{VERSION_MESSAGE}
+
+Author: {author}
+
+Data Directory: {}
+Config Directory: {}",
+        get_data_dir().display(),
+        get_config_dir().display(),
+    )
+}
+
+/// Get the directory of this project,
+pub fn project_directory() -> Option<ProjectDirs> {
+    ProjectDirs::from("ca", "maxgmr", env!("CARGO_PKG_NAME"))
+}
+
+/// Get the crate name in all caps as a string.
+pub fn project_name() -> String {
+    env!("CARGO_CRATE_NAME").to_uppercase().to_string()
+}
+
+/// Get the environment variable name that can be set to change the data folder location.
+pub fn data_folder_env_var_name() -> Option<PathBuf> {
+    env::var(format!("{}_DATA", project_name().clone()))
+        .ok()
+        .map(PathBuf::from)
+}
+
+/// Get the environment variable name that can be set to change the config folder location.
+pub fn config_folder_env_var_name() -> Option<PathBuf> {
+    env::var(format!("{}_CONFIG", project_name().clone()))
+        .ok()
+        .map(PathBuf::from)
+}
+
+/// Get the log file name.
+pub fn log_file_name() -> String {
+    format!("{}.log", env!("CARGO_PKG_NAME"))
+}
+
+/// Get the directory where program data is stored.
+pub fn get_data_dir() -> PathBuf {
+    if let Some(path_buf) = data_folder_env_var_name().clone() {
+        path_buf
+    } else if let Some(proj_dirs) = project_directory() {
+        proj_dirs.data_local_dir().to_path_buf()
+    } else {
+        PathBuf::from(".").join(".data")
+    }
+}
+
+/// Get the directory where configuration files are stored.
+pub fn get_config_dir() -> PathBuf {
+    if let Some(path_buf) = config_folder_env_var_name().clone() {
+        path_buf
+    } else if let Some(proj_dirs) = project_directory() {
+        proj_dirs.config_local_dir().to_path_buf()
+    } else {
+        PathBuf::from(".").join(".config")
+    }
+}
 
 /// Return `true` iff the input string is parseable as a standard base 64-encoded string.
 pub fn is_base64(string: &str) -> bool {
