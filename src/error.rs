@@ -12,6 +12,8 @@ pub enum Error {
     InvalidB64Error(String),
     /// Tried to read incorrect-length base 64 string.
     InvalidLengthB64Error(String, usize, usize),
+    /// Failed to convert to base 64.
+    ToB64Error(String),
     /// Could not parse UTF-8 string from bytes.
     Utf8FromBytesError(String),
     /// Could not find an account with that username in database.
@@ -47,6 +49,9 @@ impl fmt::Display for Error {
                     "InvalidLengthError: Tried to read {} bytes into {} bytes of {}.",
                     actual_length, intended_length, var_name
                 )
+            }
+            Error::ToB64Error(var_name) => {
+                format!("ToB64Error: Failed to convert \"{var_name}\" to base-64.")
             }
             Error::Utf8FromBytesError(var_name) => {
                 format!(
