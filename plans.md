@@ -3,6 +3,7 @@
 - Change password
 - Edit in default text editor
 - Make public API for crate in backend.rs
+- Don't unlock account in any functions— assume frontend has authenticated account already; take in raw password/key/etc.
 
 # Possible Features
 
