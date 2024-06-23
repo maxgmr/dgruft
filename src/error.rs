@@ -14,6 +14,8 @@ pub enum Error {
     InvalidLengthB64Error(String, usize, usize),
     /// Could not parse UTF-8 string from bytes.
     Utf8FromBytesError(String),
+    /// Could not find an account with that username in database.
+    AccountNotFoundError(String),
     /// Problem encrypting something.
     EncryptionError(String),
     /// Problem decrypting something.
@@ -49,6 +51,11 @@ impl fmt::Display for Error {
             Error::Utf8FromBytesError(var_name) => {
                 format!(
                     "Utf8FromBytesError: Could not parse byte sequence \"{}\" as a valid UTF-8 string.", var_name
+                )
+            }
+            Error::AccountNotFoundError(username) => {
+                format!(
+                    "AccountNotFoundError: Account \"{username}\" does not exist in the database."
                 )
             }
             Error::EncryptionError(error_as_string) => {

@@ -24,25 +24,31 @@ impl FileData {
     /// Non-UTF-8 filesystem encodings are unsupported.
     pub fn new<P>(account: &Account, password: &str, path: P) -> Result<Self, Error>
     where
-        P: AsRef<Path> + Display,
+        P: AsRef<Path>,
     {
         Self::new_with_content(account, password, b"", path)
     }
 
-    /// Create a new [FileData] using the given content.
+    /// Create a new empty [FileData] with a key.
     /// Non-UTF-8 filesystem encodings are unsupported.
-    pub fn new_with_content<P>(
-        account: &Account,
-        password: &str,
+    pub fn new_with_key<P>(username: &str, key: &[u8; 32], path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        Self::new_with_content_and_key(username, key, b"", path)
+    }
+
+    /// Create a new [FileData] using the given content and key.
+    /// Non-UTF-8 filesystem encodings are unsupported.
+    pub fn new_with_content_and_key<P>(
+        username: &str,
+        key: &[u8; 32],
         content: &[u8],
         path: P,
     ) -> Result<Self, Error>
     where
-        P: AsRef<Path> + Display,
+        P: AsRef<Path>,
     {
-        // Get encryption key.
-        let key = *account.unlock(password)?.key();
-
         // Reject non-UTF-8-encodable paths.
         // WARNING: May not work on Windows at all.
         let path_str = match path.as_ref().to_str() {
@@ -52,7 +58,7 @@ impl FileData {
 
         // Create file, handle file creation errors
         let content_nonce = match File::create_new(&path) {
-            Ok(_) => Self::encrypt_then_write(&path, content, &key)?,
+            Ok(_) => Self::encrypt_then_write(&path, content, key)?,
             Err(err) => match err.kind() {
                 ErrorKind::AlreadyExists => {
                     return Err(Error::FileAlreadyExistsError(PathBuf::from(path.as_ref())))
@@ -64,12 +70,28 @@ impl FileData {
             },
         };
 
-        let encrypted_path = Encrypted::new(path_str.as_bytes(), &key)?;
+        let encrypted_path = Encrypted::new(path_str.as_bytes(), key)?;
         Ok(Self {
             encrypted_path,
-            owner_username: account.username().to_owned(),
+            owner_username: username.to_owned(),
             content_nonce,
         })
+    }
+
+    /// Create a new [FileData] using the given content.
+    /// Non-UTF-8 filesystem encodings are unsupported.
+    pub fn new_with_content<P>(
+        account: &Account,
+        password: &str,
+        content: &[u8],
+        path: P,
+    ) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        // Get encryption key.
+        let key = *account.unlock(password)?.key();
+        Self::new_with_content_and_key(account.username(), &key, content, path)
     }
 
     /// Decrypt then edit the file pointed to by this [FileData] in the computer's default text editor. The file
