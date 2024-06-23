@@ -1,6 +1,5 @@
 //! All functionality related to the [SQLite](https://www.sqlite.org/about.html) database dgruft uses for persistence.
 use std::ffi::OsStr;
-use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
@@ -24,7 +23,7 @@ impl Database {
     /// Open a new connection to the database at the given path.
     pub fn connect<P>(path: P) -> rusqlite::Result<Self>
     where
-        P: AsRef<Path> + AsRef<OsStr> + Display,
+        P: AsRef<Path> + AsRef<OsStr>,
     {
         let connection = Connection::open_with_flags(
             &path,
@@ -128,7 +127,7 @@ impl Database {
     // GETTERS
 
     /// Get the path at which this [Database] is located.
-    pub fn get_path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         &self.path
     }
 }
@@ -149,3 +148,4 @@ mod tests {
         }
     }
 }
+
