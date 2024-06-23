@@ -30,21 +30,33 @@ fn match_args(args: Cli) -> eyre::Result<()> {
         Commands::New {
             username,
             password,
-            file,
+            filename,
         } => {
-            backend::new_file(username, password, file)?;
+            backend::new_file(username, password, filename)?;
         }
         Commands::Edit {
             username,
             password,
-            file,
-        } => {}
+            filename,
+        } => {
+            backend::edit_file(username, password, filename)?;
+        }
         Commands::List {
             files,
             passwords,
             username,
             password,
-        } => {}
+        } => {
+            if files {
+                backend::list_files(username, password)?;
+            } else if passwords {
+                backend::list_passwords(username, password)?;
+            } else {
+                return Err(eyre!(
+                    "Impossible option combination: files, passwords both false."
+                ));
+            }
+        }
     };
     Ok(())
 }

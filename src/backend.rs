@@ -1,7 +1,7 @@
 //! Backend API.
 use std::{
     ffi::OsString,
-    fs::{create_dir, remove_dir_all},
+    fs::{self, create_dir, remove_dir_all},
     path::PathBuf,
 };
 
@@ -104,21 +104,60 @@ pub fn delete_account(username: String, password: String, force: bool) -> eyre::
 }
 
 /// Create a new file, add its data to the database, and store it in the user directory.
-pub fn new_file(username: String, password: String, file: OsString) -> eyre::Result<()> {
+pub fn new_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
     // Load account entry from db.
     let mut db = load_db()?;
     let unlocked_account = login(&mut db, &username, &password)?;
 
     // Get user directory.
-    let mut acc_dir = acc_path(&username);
-    acc_dir.push(file);
+    let mut file_path = acc_path(&username);
+    file_path.push(&filename);
 
     // Create new file.
-    let file_data =
-        FileData::new_with_key(unlocked_account.username(), unlocked_account.key(), acc_dir)?;
+    let file_data = FileData::new_with_key(
+        unlocked_account.username(),
+        unlocked_account.key(),
+        &file_path,
+    )?;
 
     // Add to database— if err then undo file creation.
-    // TODO: Create function to insert new file data
+    let b64_file_data = match file_data.to_b64() {
+        Some(b64_file_data) => b64_file_data,
+        None => return Err(Error::ToB64Error(filename.to_string_lossy().to_string()).into()),
+    };
+    if let Err(err) = db.add_new_file_data(b64_file_data) {
+        // Undo change to disk.
+        fs::remove_file(&file_path)?;
+        return Err(err.into());
+    }
 
+    if VERBOSE {
+        println!("File at {:?} created successfully.", &file_path);
+    }
+
+    Ok(())
+}
+
+/// Decrypt and edit an existing file.
+pub fn edit_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
+
+/// Delete a file from the user directory and database.
+pub fn delete_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
+
+/// Decrypt and list the names of this account's files.
+pub fn list_files(username: String, password: String) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
+
+/// Decrypt and list the names of this account's passwords.
+pub fn list_passwords(username: String, password: String) -> eyre::Result<()> {
+    // TODO
     Ok(())
 }

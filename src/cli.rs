@@ -42,7 +42,7 @@ pub enum Commands {
         password: String,
     },
 
-    /// Create and open a new file.
+    /// Create a new file.
     #[command(arg_required_else_help = true)]
     New {
         /// Your account's username.
@@ -50,7 +50,7 @@ pub enum Commands {
         /// Your account's password.
         password: String,
         /// The name of your new file.
-        file: OsString,
+        filename: OsString,
     },
 
     /// Edit an existing file.
@@ -61,7 +61,7 @@ pub enum Commands {
         /// Your account's password.
         password: String,
         /// The name of the file you wish to edit.
-        file: OsString,
+        filename: OsString,
     },
 
     /// List the names of your account's files or passwords.
