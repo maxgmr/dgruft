@@ -30,6 +30,8 @@ fn file_tests() {
     let account = Account::from_b64(db.get_b64_account(username).unwrap().unwrap()).unwrap();
     let sec_fields = account.unlock(password).unwrap();
 
+    assert!(db.get_b64_files(username).unwrap().unwrap().is_empty());
+
     let file_1 =
         FileData::new_with_key(sec_fields.username(), sec_fields.key(), &file_path_1).unwrap();
     db.add_new_file_data(file_1.to_b64().unwrap()).unwrap();
@@ -105,6 +107,7 @@ fn file_tests() {
         ))
         .unwrap()
         .is_none());
+    assert!(db.get_b64_files(username).unwrap().is_none());
 }
 
 #[test]

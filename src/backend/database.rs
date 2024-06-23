@@ -132,6 +132,30 @@ impl Database {
         }
     }
 
+    /// Retrieve a user's files from the database as a [Vec] of [Base64FileData].
+    /// Return [`Ok<None>`] if no account with that username exists.
+    /// Return [Err] on a database error.
+    pub fn get_b64_files(&self, username: &str) -> rusqlite::Result<Option<Vec<Base64FileData>>> {
+        // Ensure account exists
+        if let Ok(None) = self.get_b64_account(username) {
+            return Ok(None);
+        };
+
+        let mut statement = self.connection.prepare(GET_USER_FILES)?;
+        let rows = statement.query_map([helpers::bytes_to_b64(username.as_bytes())], |row| {
+            Ok(Base64FileData {
+                b64_path: row.get::<usize, String>(0)?,
+                b64_owner_username: row.get::<usize, String>(1)?,
+                b64_content_nonce: row.get::<usize, String>(2)?,
+            })
+        })?;
+        let mut files = Vec::new();
+        for b64file_result in rows {
+            files.push(b64file_result?);
+        }
+        Ok(Some(files))
+    }
+
     /// Retrieve file data from the database as a [Base64FileData].
     /// Return [`Ok<None>`] if no file with that path exists.
     /// Return [Err] on a database error.
