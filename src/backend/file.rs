@@ -72,6 +72,37 @@ impl FileData {
         })
     }
 
+    /// Decrypt then edit the file pointed to by this [FileData] in the computer's default text editor. The file
+    /// is then re-encrypted and saved after editing.
+    pub fn edit(&mut self, key: &[u8; 32]) -> Result<(), Error> {
+        let decrypted_bytes = self.open_decrypted(key)?;
+        // let decrypted_string = helpers::bytes_to_utf8(&decrypted_bytes, "edit_file")?;
+        let decrypted_path_bytes = self.encrypted_path.decrypt(key)?;
+        let decrypted_path_buf = PathBuf::from(helpers::bytes_to_utf8(
+            &decrypted_path_bytes,
+            "decrypted_path",
+        )?);
+
+        let edited_bytes = match edit::edit_bytes(decrypted_bytes) {
+            Ok(bytes) => bytes,
+            Err(err) => match err.kind() {
+                ErrorKind::InvalidData => {
+                    return Err(Error::Utf8FromBytesError("edit_file".to_owned()));
+                }
+                ErrorKind::NotFound => {
+                    return Err(Error::FileNotFoundError(decrypted_path_buf.clone()));
+                }
+                _ => return Err(Error::UnhandledError(err.to_string())),
+            },
+        };
+
+        let content_nonce = Self::encrypt_then_write(decrypted_path_buf, &edited_bytes, key)?;
+
+        self.content_nonce = content_nonce;
+
+        Ok(())
+    }
+
     /// Open, then decrypt, the file at the path defined by this [FileData].
     pub fn open_decrypted(&self, key: &[u8; 32]) -> Result<Vec<u8>, Error> {
         let decrypted_path = self.encrypted_path.decrypt(key)?;
@@ -124,7 +155,7 @@ impl FileData {
     // Helper function to open file.
     fn open_file<P>(path: P) -> Result<File, Error>
     where
-        P: AsRef<Path> + Display,
+        P: AsRef<Path>,
     {
         match OpenOptions::new()
             .read(true)
@@ -146,7 +177,7 @@ impl FileData {
     // Helper function to write content to file. Returns nonce used to encrypt text.
     fn encrypt_then_write<P>(path: P, content: &[u8], key: &[u8; 32]) -> Result<[u8; 12], Error>
     where
-        P: AsRef<Path> + Display,
+        P: AsRef<Path>,
     {
         let encrypted_content = Encrypted::new(content, key)?;
         let mut file = Self::open_file(&path)?;
@@ -215,14 +246,12 @@ mod tests {
 
     const TEST_USERNAME: &str = "my_account";
     const TEST_PASSWORD: &str = "my_password";
-    const TEST_CONTENT: &str = "
-        My secret Christmas gift list:
-        Bobby: Football
-        Alice: аукцыон
-        Charlie: 棋盘游戏
+    const TEST_CONTENT: &str = "My secret Christmas gift list:
+Bobby: Football
+Alice: аукцыон
+Charlie: 棋盘游戏
 
-        Don't tell anybody!!!!
-        ";
+Don't tell anybody!!!!";
 
     fn cleanup_test_file(path: &str) {
         Command::new("rm").arg(path).status().expect("failed");
@@ -246,6 +275,27 @@ mod tests {
             TEST_CONTENT,
             helpers::bytes_to_utf8(&content, "test_content").unwrap()
         );
+        cleanup_test_file(test_file);
+    }
+
+    #[test]
+    #[ignore] // run using `cargo t -- --ignored --nocapture`
+    fn test_file_edit() {
+        // Must be manually verified
+        let test_file = "test_files/my_test_file";
+        let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
+        let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
+        let mut my_file = FileData::new_with_content(
+            &my_account,
+            TEST_PASSWORD,
+            TEST_CONTENT.as_bytes(),
+            test_file,
+        )
+        .unwrap();
+        my_file.edit(unlocked.key()).unwrap();
+        let content = my_file.open_decrypted(unlocked.key()).unwrap();
+        println!("{}", helpers::bytes_to_utf8(&content, "content").unwrap());
+
         cleanup_test_file(test_file);
     }
 
