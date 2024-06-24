@@ -1,7 +1,7 @@
 //! Backend API.
 use std::{
     ffi::OsString,
-    fs::{self, create_dir, remove_dir_all},
+    fs::{self, create_dir, remove_dir_all, remove_file},
     io::{self, Write},
     path::PathBuf,
 };
@@ -98,11 +98,17 @@ pub fn delete_account(username: String, password: String, force: bool) -> eyre::
         match input.to_lowercase().chars().next() {
             Some('y') => {}
             _ => {
-                println!("File deletion cancelled.");
+                println!("Account deletion cancelled.");
                 return Ok(());
             }
         }
     }
+
+    // Backup account's database entry.
+    let account_db_backup = match db.get_b64_account(&username)? {
+        None => return Err(Error::AccountNotFoundError(username.clone()).into()),
+        Some(acc) => acc,
+    };
 
     // Delete this account's database entry.
     if db.delete_account(&username)?.is_none() {
@@ -114,12 +120,16 @@ pub fn delete_account(username: String, password: String, force: bool) -> eyre::
     let acc_dir = acc_path(&username);
     if let Err(err) = remove_dir_all(acc_dir) {
         // Undo database changes.
+        db.add_new_account(account_db_backup)?;
+
         for file in files {
             db.add_new_file_data(file.to_b64()?)?;
         }
         for password in passwords {
             db.add_new_password(password.to_b64())?;
         }
+
+        eprintln!("Error deleting account database entry— deletion process cancelled.");
         return Err(err.into());
     }
 
@@ -149,6 +159,8 @@ pub fn new_file(username: String, password: String, filename: OsString) -> eyre:
     if let Err(err) = db.add_new_file_data(file_data.to_b64()?) {
         // Undo change to disk.
         fs::remove_file(&file_path)?;
+
+        eprintln!("Error creating file database entry— deletion process cancelled.");
         return Err(err.into());
     }
 
@@ -188,6 +200,8 @@ pub fn open_file(username: String, password: String, filename: OsString) -> eyre
             unlocked_account.key(),
             file.content_nonce(),
         )?;
+
+        eprintln!("Error updating file on database— deletion process cancelled.");
         return Err(err.into());
     };
 
@@ -202,7 +216,52 @@ pub fn delete_file(
     filename: OsString,
     force: bool,
 ) -> eyre::Result<()> {
-    // TODO
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Get file path.
+    let mut file_path = acc_path(unlocked_account.username());
+    file_path.push(&filename);
+
+    // Load file.
+    let file = match db.get_b64_file_data(&helpers::path_to_string(&file_path)?)? {
+        Some(b64_file_data) => FileData::from_b64(b64_file_data)?,
+        None => return Err(Error::FileNotFoundError(file_path).into()),
+    };
+
+    // CLI confirm deletion if not forced.
+    if !force {
+        print!(
+            "Really delete file \"{:?}\" at {:?}? [y/N] ",
+            file.name(),
+            file.path(),
+        );
+        let mut input = String::new();
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut input)?;
+        match input.to_lowercase().chars().next() {
+            Some('y') => {}
+            _ => {
+                println!("File deletion cancelled.");
+                return Ok(());
+            }
+        }
+    }
+
+    // Delete file database entry.
+    db.delete_file_data(&helpers::path_to_string(&file_path)?)?;
+
+    // Delete the file. Undo database changes if the file can't be deleted.
+    if let Err(err) = remove_file(&file_path) {
+        // Undo database changes.
+        db.add_new_file_data(file.to_b64()?)?;
+
+        eprintln!("Error deleting file— deletion process cancelled.");
+        return Err(err.into());
+    }
+
+    println!("File {:?} deleted successfully.", file.name());
     Ok(())
 }
 

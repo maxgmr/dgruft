@@ -77,6 +77,11 @@ pub const GET_FILE: &str = "
     WHERE path = ?1
 ";
 
+pub const DELETE_FILE: &str = "
+    DELETE FROM files
+    WHERE path = ?1
+";
+
 pub const GET_USER_FILES: &str = "
     SELECT
         path,

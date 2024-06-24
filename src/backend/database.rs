@@ -188,6 +188,20 @@ impl Database {
         Ok(())
     }
 
+    /// Delete a given account from the `files` database table.
+    /// Matches the file path string of the account.
+    /// Return [`Ok<None>`] if no file with that path exists.
+    pub fn delete_file_data(&mut self, path_string: &str) -> rusqlite::Result<Option<()>> {
+        let num_rows = self
+            .connection
+            .execute(DELETE_FILE, [helpers::bytes_to_b64(path_string.as_bytes())])?;
+        if num_rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
+    }
+
     /// Update the content nonce of a file on the database.
     /// Return [rusqlite::Error::QueryReturnedNoRows] and undoes the transaction iff not exactly
     /// one row would be changed.
