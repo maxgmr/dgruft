@@ -1,13 +1,14 @@
 //! All functionality related to the [SQLite](https://www.sqlite.org/about.html) database dgruft uses for persistence.
 use std::ffi::OsStr;
-use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::usize;
 
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
 use crate::{
     backend::{
-        account::Base64Account, password::Base64Password, sql_schemas::*, sql_statements::*,
+        account::Base64Account, file::Base64FileData, password::Base64Password, sql_schemas::*,
+        sql_statements::*,
     },
     helpers,
 };
@@ -24,7 +25,7 @@ impl Database {
     /// Open a new connection to the database at the given path.
     pub fn connect<P>(path: P) -> rusqlite::Result<Self>
     where
-        P: AsRef<Path> + AsRef<OsStr> + Display,
+        P: AsRef<Path> + AsRef<OsStr>,
     {
         let connection = Connection::open_with_flags(
             &path,
@@ -117,6 +118,113 @@ impl Database {
         Ok(())
     }
 
+    /// Delete a given account from the `user_credentials` database table.
+    /// Matches the username of the account.
+    /// Return [`Ok<None>`] if no account with that username exists.
+    pub fn delete_account(&mut self, username: &str) -> rusqlite::Result<Option<()>> {
+        let num_rows = self
+            .connection
+            .execute(DELETE_ACCOUNT, [helpers::bytes_to_b64(username.as_bytes())])?;
+        if num_rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
+    }
+
+    /// Retrieve a user's files from the database as a [Vec] of [Base64FileData].
+    /// Return [`Ok<None>`] if no account with that username exists.
+    /// Return [Err] on a database error.
+    pub fn get_b64_files(&self, username: &str) -> rusqlite::Result<Option<Vec<Base64FileData>>> {
+        // Ensure account exists
+        if let Ok(None) = self.get_b64_account(username) {
+            return Ok(None);
+        };
+
+        let mut statement = self.connection.prepare(GET_USER_FILES)?;
+        let rows = statement.query_map([helpers::bytes_to_b64(username.as_bytes())], |row| {
+            Ok(Base64FileData {
+                b64_path: row.get::<usize, String>(0)?,
+                b64_name: row.get::<usize, String>(1)?,
+                b64_owner_username: row.get::<usize, String>(2)?,
+                b64_content_nonce: row.get::<usize, String>(3)?,
+            })
+        })?;
+        let mut files = Vec::new();
+        for b64file_result in rows {
+            files.push(b64file_result?);
+        }
+        Ok(Some(files))
+    }
+
+    /// Retrieve file data from the database as a [Base64FileData].
+    /// Return [`Ok<None>`] if no file with that path exists.
+    /// Return [Err] on a database error.
+    pub fn get_b64_file_data(&self, path_string: &str) -> rusqlite::Result<Option<Base64FileData>> {
+        let mut statement = self.connection.prepare(GET_FILE)?;
+
+        let file_data_result =
+            statement.query_row([helpers::bytes_to_b64(path_string.as_bytes())], |row| {
+                Ok(Base64FileData {
+                    b64_path: row.get::<usize, String>(0)?,
+                    b64_name: row.get::<usize, String>(1)?,
+                    b64_owner_username: row.get::<usize, String>(2)?,
+                    b64_content_nonce: row.get::<usize, String>(3)?,
+                })
+            });
+
+        match file_data_result {
+            Ok(file_data) => Ok(Some(file_data)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Add [Base64FileData] to the `files` database table.
+    /// Return [Err] if that file path already exists.
+    pub fn add_new_file_data(&mut self, b64_file_data: Base64FileData) -> rusqlite::Result<()> {
+        self.connection
+            .execute(INSERT_NEW_FILE, b64_file_data.as_tuple())?;
+        Ok(())
+    }
+
+    /// Delete a given account from the `files` database table.
+    /// Matches the file path string of the account.
+    /// Return [`Ok<None>`] if no file with that path exists.
+    pub fn delete_file_data(&mut self, path_string: &str) -> rusqlite::Result<Option<()>> {
+        let num_rows = self
+            .connection
+            .execute(DELETE_FILE, [helpers::bytes_to_b64(path_string.as_bytes())])?;
+        if num_rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(()))
+        }
+    }
+
+    /// Update the content nonce of a file on the database.
+    /// Return [rusqlite::Error::QueryReturnedNoRows] and undoes the transaction iff not exactly
+    /// one row would be changed.
+    pub fn update_file_content_nonce(
+        &mut self,
+        new_nonce: &[u8; 12],
+        path_string: &str,
+    ) -> rusqlite::Result<()> {
+        let tx = self.connection.transaction()?;
+        let num_changed = tx.execute(
+            UPDATE_FILE_CONTENT_NONCE,
+            [
+                helpers::bytes_to_b64(new_nonce),
+                helpers::bytes_to_b64(path_string.as_bytes()),
+            ],
+        )?;
+        if num_changed != 1 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Delete the contents of the given table.
     /// Return [Err] if that table does not exist.
     pub fn truncate_table(&mut self, table_name: &str) -> rusqlite::Result<()> {
@@ -128,7 +236,7 @@ impl Database {
     // GETTERS
 
     /// Get the path at which this [Database] is located.
-    pub fn get_path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         &self.path
     }
 }

@@ -6,6 +6,8 @@
 
 /// Backend code for `dgruft`.
 pub mod backend;
+/// Command line argument parsing.
+pub mod cli;
 /// `dgruft`-specific errors.
 pub mod error;
 #[cfg(feature = "frontend")]

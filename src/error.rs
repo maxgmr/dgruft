@@ -12,8 +12,12 @@ pub enum Error {
     InvalidB64Error(String),
     /// Tried to read incorrect-length base 64 string.
     InvalidLengthB64Error(String, usize, usize),
+    /// Failed to convert to base 64.
+    ToB64Error(String),
     /// Could not parse UTF-8 string from bytes.
     Utf8FromBytesError(String),
+    /// Could not find an account with that username in database.
+    AccountNotFoundError(String),
     /// Problem encrypting something.
     EncryptionError(String),
     /// Problem decrypting something.
@@ -46,9 +50,17 @@ impl fmt::Display for Error {
                     actual_length, intended_length, var_name
                 )
             }
+            Error::ToB64Error(var_name) => {
+                format!("ToB64Error: Failed to convert \"{var_name}\" to base-64.")
+            }
             Error::Utf8FromBytesError(var_name) => {
                 format!(
                     "Utf8FromBytesError: Could not parse byte sequence \"{}\" as a valid UTF-8 string.", var_name
+                )
+            }
+            Error::AccountNotFoundError(username) => {
+                format!(
+                    "AccountNotFoundError: Account \"{username}\" does not exist in the database."
                 )
             }
             Error::EncryptionError(error_as_string) => {
@@ -85,3 +97,4 @@ impl fmt::Display for Error {
         write!(f, "{}", message)
     }
 }
+impl std::error::Error for Error {}

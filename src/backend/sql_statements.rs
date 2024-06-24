@@ -22,6 +22,11 @@ pub const GET_ACCOUNT: &str = "
     WHERE username = ?1
 ";
 
+pub const DELETE_ACCOUNT: &str = "
+    DELETE FROM user_credentials
+    WHERE username = ?1
+";
+
 pub const INSERT_NEW_PASSWORD: &str = "
     INSERT INTO passwords (
         owner_username,
@@ -54,20 +59,41 @@ pub const GET_USER_PASSWORDS: &str = "
 
 pub const INSERT_NEW_FILE: &str = "
     INSERT INTO files (
-        encrypted_path,
+        path,
+        name,
         owner_username,
-        content_nonce,
-        path_nonce
+        content_nonce
     )
     VALUES (?1, ?2, ?3, ?4)
 ";
 
+pub const GET_FILE: &str = "
+    SELECT
+        path,
+        name,
+        owner_username,
+        content_nonce
+    FROM files
+    WHERE path = ?1
+";
+
+pub const DELETE_FILE: &str = "
+    DELETE FROM files
+    WHERE path = ?1
+";
+
 pub const GET_USER_FILES: &str = "
     SELECT
-        encrypted_path,
+        path,
+        name,
         owner_username,
-        content_nonce,
-        path_nonce
+        content_nonce
     FROM files
     WHERE owner_username = ?1
+";
+
+pub const UPDATE_FILE_CONTENT_NONCE: &str = "
+    UPDATE files
+    SET content_nonce = ?1
+    WHERE path = ?2
 ";

@@ -1,10 +1,182 @@
+use std::ffi::OsString;
+
 mod common;
 
+use account::Account;
 use dgruft::backend::*;
+use dgruft::error::Error;
 use dgruft::helpers;
+use file::FileData;
+
+// Run with `cargo test --test '*' -- --test-threads=1`
 
 #[test]
-fn file_tests() {}
+#[ignore]
+fn edit_tests() {
+    common::reset_test_db();
+    let _ = std::fs::remove_file("test_files/my_file");
+    let _ = std::fs::remove_file("test_files/my_other_file");
+    let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
+
+    let file_name_1 = OsString::from("my_file");
+    let mut file_path_1 = common::get_test_dir();
+    file_path_1.push(file_name_1.clone());
+
+    let file_name_2 = OsString::from("my_other_file");
+    let mut file_path_2 = common::get_test_dir();
+    file_path_2.push(file_name_2.clone());
+
+    let username = "my_account_1";
+    let password = "this is my passphrase. open sesame!";
+    let account = Account::new(username, password).unwrap();
+    db.add_new_account(account.to_b64()).unwrap();
+    let account = Account::from_b64(db.get_b64_account(username).unwrap().unwrap()).unwrap();
+    let sec_fields = account.unlock(password).unwrap();
+
+    let mut file = FileData::new_with_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_name_1.clone(),
+        &file_path_1,
+    )
+    .unwrap();
+    db.add_new_file_data(file.to_b64().unwrap()).unwrap();
+
+    file.edit(sec_fields.key()).unwrap();
+
+    // Update file data to match new nonce. Undo changes if nonce change fails.
+    db.update_file_content_nonce(
+        file.content_nonce(),
+        &helpers::path_to_string(file.path()).unwrap(),
+    )
+    .unwrap();
+
+    let mut loaded_file = match db
+        .get_b64_file_data(&helpers::path_to_string(&file_path_1).unwrap())
+        .unwrap()
+    {
+        Some(b64_file_data) => FileData::from_b64(b64_file_data).unwrap(),
+        None => panic!(),
+    };
+
+    assert_eq!(loaded_file.path(), &file_path_1);
+    assert_eq!(loaded_file.name(), &file_name_1);
+    assert_eq!(loaded_file.owner_username(), username);
+    assert_eq!(file.path(), loaded_file.path());
+    assert_eq!(file.name(), loaded_file.name());
+    assert_eq!(file.owner_username(), loaded_file.owner_username());
+
+    loaded_file.edit(sec_fields.key()).unwrap();
+}
+
+#[test]
+fn file_tests() {
+    common::reset_test_db();
+    let _ = std::fs::remove_file("test_files/my_file");
+    let _ = std::fs::remove_file("test_files/my_other_file");
+    let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
+
+    let file_name_1 = OsString::from("my_file");
+    let mut file_path_1 = common::get_test_dir();
+    file_path_1.push(file_name_1.clone());
+
+    let file_name_2 = OsString::from("my_other_file");
+    let mut file_path_2 = common::get_test_dir();
+    file_path_2.push(file_name_2.clone());
+
+    let username = "my_account_1";
+    let password = "this is my passphrase. open sesame!";
+    let account = Account::new(username, password).unwrap();
+    db.add_new_account(account.to_b64()).unwrap();
+    let account = Account::from_b64(db.get_b64_account(username).unwrap().unwrap()).unwrap();
+    let sec_fields = account.unlock(password).unwrap();
+
+    assert!(db.get_b64_files(username).unwrap().unwrap().is_empty());
+
+    let file_1 = FileData::new_with_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_name_1.clone(),
+        &file_path_1,
+    )
+    .unwrap();
+    db.add_new_file_data(file_1.to_b64().unwrap()).unwrap();
+
+    // Ensure that duplicate files get rejected, even if they come from other accounts.
+    let other_username = "other_account";
+    let other_password = "other_password";
+    let other_account = Account::new(other_username, other_password).unwrap();
+    db.add_new_account(other_account.to_b64()).unwrap();
+    let other_account =
+        Account::from_b64(db.get_b64_account(other_username).unwrap().unwrap()).unwrap();
+    let other_sec_fields = other_account.unlock(other_password).unwrap();
+    let dupe_file = FileData::new_with_key(
+        other_sec_fields.username(),
+        other_sec_fields.key(),
+        file_name_2.clone(),
+        &file_path_1,
+    )
+    .unwrap_err();
+    if let Error::FileAlreadyExistsError(_) = dupe_file {
+    } else {
+        panic!("Wrong error type");
+    }
+
+    let file_2_content = "testing, testing 123";
+    let file_2 = FileData::new_with_content_and_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_name_2.clone(),
+        file_2_content.as_bytes(),
+        &file_path_2,
+    )
+    .unwrap();
+    db.add_new_file_data(file_2.to_b64().unwrap()).unwrap();
+
+    // Load files from database
+    println!("{}", file_path_1.to_str().unwrap());
+    let file_1 = FileData::from_b64(
+        db.get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_1.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .unwrap(),
+    )
+    .unwrap();
+    let file_2 = FileData::from_b64(
+        db.get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_2.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .unwrap(),
+    )
+    .unwrap();
+
+    // Ensure files content O.K.
+    let content_1 = file_1.open_decrypted(sec_fields.key()).unwrap();
+    assert_eq!(content_1, b"");
+    let content_2 = file_2.open_decrypted(sec_fields.key()).unwrap();
+    assert_eq!(
+        helpers::bytes_to_utf8(&content_2, "content_2").unwrap(),
+        file_2_content,
+    );
+
+    // Ensure deletion works as intended.
+    db.delete_account(username).unwrap().unwrap();
+    assert!(db
+        .get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_1.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .is_none());
+    assert!(db
+        .get_b64_file_data(&helpers::bytes_to_b64(
+            file_path_2.to_str().unwrap().as_bytes(),
+        ))
+        .unwrap()
+        .is_none());
+    assert!(db.get_b64_files(username).unwrap().is_none());
+}
 
 #[test]
 fn password_tests() {
@@ -46,7 +218,7 @@ fn password_tests() {
 
     if db.get_b64_account("bleurgh").unwrap().is_none() {
     } else {
-        panic!("Should have returned None");
+        panic!("bleurgh should have returned None");
     };
 
     // Add some passwords for these accounts
@@ -152,9 +324,6 @@ fn password_tests() {
         encrypted: &encrypted::Encrypted,
         key: &[u8; 32],
     ) {
-        let decrypted_text =
-            helpers::bytes_to_utf8(&encrypted.decrypt(key).unwrap(), "decrypted").unwrap();
-        dbg!(unencrypted_str, decrypted_text);
         assert_eq!(unencrypted_str.as_bytes(), encrypted.decrypt(key).unwrap());
     }
 
@@ -194,4 +363,18 @@ fn password_tests() {
     assert_encrypted_eq(p_2_2_username, loaded_p_2_2.encrypted_username(), key_2);
     assert_encrypted_eq(p_2_2_content, loaded_p_2_2.encrypted_content(), key_2);
     assert_encrypted_eq(p_2_2_notes, loaded_p_2_2.encrypted_notes(), key_2);
+
+    // Check deletion works as intended.
+    db.delete_account(username_1).unwrap().unwrap();
+    if db.get_b64_account(username_1).unwrap().is_none() {
+    } else {
+        panic!("Failed to delete account_1 from database.");
+    };
+
+    if db.delete_account(username_1).unwrap().is_none() {
+    } else {
+        panic!("Duplicate delete should have returned None");
+    };
+
+    assert!(db.get_b64_passwords(username_1).unwrap().is_none());
 }
