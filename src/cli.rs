@@ -40,6 +40,8 @@ pub enum Commands {
 
     /// Manage files.
     #[command(arg_required_else_help = true)]
+    #[command(alias = "file")]
+    #[command(alias = "f")]
     #[clap(group(
             ArgGroup::new("file")
                 .required(true)           
@@ -67,6 +69,8 @@ pub enum Commands {
 
     /// Manage passwords.
     #[command(arg_required_else_help = true)]
+    #[command(alias = "password")]
+    #[command(alias = "p")]
     #[clap(group(
             ArgGroup::new("password")
                 .required(true)           
