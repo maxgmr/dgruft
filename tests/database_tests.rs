@@ -11,6 +11,65 @@ use file::FileData;
 // Run with `cargo test --test '*' -- --test-threads=1`
 
 #[test]
+#[ignore]
+fn edit_tests() {
+    common::reset_test_db();
+    let _ = std::fs::remove_file("test_files/my_file");
+    let _ = std::fs::remove_file("test_files/my_other_file");
+    let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
+
+    let file_name_1 = OsString::from("my_file");
+    let mut file_path_1 = common::get_test_dir();
+    file_path_1.push(file_name_1.clone());
+
+    let file_name_2 = OsString::from("my_other_file");
+    let mut file_path_2 = common::get_test_dir();
+    file_path_2.push(file_name_2.clone());
+
+    let username = "my_account_1";
+    let password = "this is my passphrase. open sesame!";
+    let account = Account::new(username, password).unwrap();
+    db.add_new_account(account.to_b64()).unwrap();
+    let account = Account::from_b64(db.get_b64_account(username).unwrap().unwrap()).unwrap();
+    let sec_fields = account.unlock(password).unwrap();
+
+    let mut file = FileData::new_with_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_name_1.clone(),
+        &file_path_1,
+    )
+    .unwrap();
+    db.add_new_file_data(file.to_b64().unwrap()).unwrap();
+
+    file.edit(sec_fields.key()).unwrap();
+
+    // Update file data to match new nonce. Undo changes if nonce change fails.
+    db.update_file_content_nonce(
+        file.content_nonce(),
+        &helpers::path_to_string(file.path()).unwrap(),
+    )
+    .unwrap();
+
+    let mut loaded_file = match db
+        .get_b64_file_data(&helpers::path_to_string(&file_path_1).unwrap())
+        .unwrap()
+    {
+        Some(b64_file_data) => FileData::from_b64(b64_file_data).unwrap(),
+        None => panic!(),
+    };
+
+    assert_eq!(loaded_file.path(), &file_path_1);
+    assert_eq!(loaded_file.name(), &file_name_1);
+    assert_eq!(loaded_file.owner_username(), username);
+    assert_eq!(file.path(), loaded_file.path());
+    assert_eq!(file.name(), loaded_file.name());
+    assert_eq!(file.owner_username(), loaded_file.owner_username());
+
+    loaded_file.edit(sec_fields.key()).unwrap();
+}
+
+#[test]
 fn file_tests() {
     common::reset_test_db();
     let _ = std::fs::remove_file("test_files/my_file");
@@ -265,9 +324,6 @@ fn password_tests() {
         encrypted: &encrypted::Encrypted,
         key: &[u8; 32],
     ) {
-        let decrypted_text =
-            helpers::bytes_to_utf8(&encrypted.decrypt(key).unwrap(), "decrypted").unwrap();
-        dbg!(unencrypted_str, decrypted_text);
         assert_eq!(unencrypted_str.as_bytes(), encrypted.decrypt(key).unwrap());
     }
 

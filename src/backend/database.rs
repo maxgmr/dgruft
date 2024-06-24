@@ -163,14 +163,15 @@ impl Database {
     pub fn get_b64_file_data(&self, path_string: &str) -> rusqlite::Result<Option<Base64FileData>> {
         let mut statement = self.connection.prepare(GET_FILE)?;
 
-        let file_data_result = statement.query_row([path_string], |row| {
-            Ok(Base64FileData {
-                b64_path: row.get::<usize, String>(0)?,
-                b64_name: row.get::<usize, String>(1)?,
-                b64_owner_username: row.get::<usize, String>(2)?,
-                b64_content_nonce: row.get::<usize, String>(3)?,
-            })
-        });
+        let file_data_result =
+            statement.query_row([helpers::bytes_to_b64(path_string.as_bytes())], |row| {
+                Ok(Base64FileData {
+                    b64_path: row.get::<usize, String>(0)?,
+                    b64_name: row.get::<usize, String>(1)?,
+                    b64_owner_username: row.get::<usize, String>(2)?,
+                    b64_content_nonce: row.get::<usize, String>(3)?,
+                })
+            });
 
         match file_data_result {
             Ok(file_data) => Ok(Some(file_data)),
@@ -184,6 +185,29 @@ impl Database {
     pub fn add_new_file_data(&mut self, b64_file_data: Base64FileData) -> rusqlite::Result<()> {
         self.connection
             .execute(INSERT_NEW_FILE, b64_file_data.as_tuple())?;
+        Ok(())
+    }
+
+    /// Update the content nonce of a file on the database.
+    /// Return [rusqlite::Error::QueryReturnedNoRows] and undoes the transaction iff not exactly
+    /// one row would be changed.
+    pub fn update_file_content_nonce(
+        &mut self,
+        new_nonce: &[u8; 12],
+        path_string: &str,
+    ) -> rusqlite::Result<()> {
+        let tx = self.connection.transaction()?;
+        let num_changed = tx.execute(
+            UPDATE_FILE_CONTENT_NONCE,
+            [
+                helpers::bytes_to_b64(new_nonce),
+                helpers::bytes_to_b64(path_string.as_bytes()),
+            ],
+        )?;
+        if num_changed != 1 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        tx.commit()?;
         Ok(())
     }
 

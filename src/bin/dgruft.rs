@@ -37,7 +37,7 @@ fn match_args(args: Cli) -> eyre::Result<()> {
             if new {
                 backend::new_file(args.username, password, filename.unwrap())?;
             } else if open {
-                backend::edit_file(args.username, password, filename.unwrap())?;
+                backend::open_file(args.username, password, filename.unwrap())?;
             } else if list {
                 backend::list_files(args.username, password)?;
             } else if delete {
@@ -61,7 +61,7 @@ fn match_args(args: Cli) -> eyre::Result<()> {
             if new {
                 backend::new_password(args.username, password, passwordname.unwrap())?;
             } else if open {
-                backend::edit_password(args.username, password, passwordname.unwrap())?;
+                backend::open_password(args.username, password, passwordname.unwrap())?;
             } else if list {
                 backend::list_passwords(args.username, password)?;
             } else if delete {

@@ -210,12 +210,37 @@ impl FileData {
         }
     }
 
+    /// Encrypt the given content with the given key and nonce, then write it to the file.
+    pub fn encrypt_write_with_nonce<P>(
+        path: P,
+        content: &[u8],
+        key: &[u8; 32],
+        nonce: &[u8; 12],
+    ) -> Result<(), Error>
+    where
+        P: AsRef<Path>,
+    {
+        let encrypted_content = Encrypted::from_nonce(content, key, nonce)?;
+        Self::write_encrypted(path, encrypted_content)?;
+        Ok(())
+    }
+
     // Helper function to write content to file. Returns nonce used to encrypt text.
     fn encrypt_then_write<P>(path: P, content: &[u8], key: &[u8; 32]) -> Result<[u8; 12], Error>
     where
         P: AsRef<Path>,
     {
         let encrypted_content = Encrypted::new(content, key)?;
+        let nonce = *encrypted_content.nonce();
+        Self::write_encrypted(path, encrypted_content)?;
+        Ok(nonce)
+    }
+
+    // Helper function to write encrypted bytes.
+    fn write_encrypted<P>(path: P, encrypted_content: Encrypted) -> Result<(), Error>
+    where
+        P: AsRef<Path>,
+    {
         let mut file = Self::open_file(&path)?;
         if let Err(err) = file.write_all(encrypted_content.ciphertext()) {
             match err.kind() {
@@ -228,7 +253,7 @@ impl FileData {
                 _ => return Err(Error::UnhandledError(err.to_string())),
             }
         }
-        Ok(*encrypted_content.nonce())
+        Ok(())
     }
 
     // GETTERS

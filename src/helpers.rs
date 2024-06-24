@@ -1,5 +1,8 @@
 //! Small, general helper functions.
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use base64ct::{Base64, Encoding};
 use directories::ProjectDirs;
@@ -80,6 +83,15 @@ pub fn get_config_dir() -> PathBuf {
         proj_dirs.config_local_dir().to_path_buf()
     } else {
         PathBuf::from(".").join(".config")
+    }
+}
+
+/// Convert Path to String.
+pub fn path_to_string(path: &Path) -> Result<String, Error> {
+    if let Some(string) = path.to_str() {
+        Ok(string.to_owned())
+    } else {
+        Err(Error::NonUtf8FilePathError("path".to_owned()))
     }
 }
 

@@ -7,7 +7,6 @@ use std::{
 };
 
 use color_eyre::eyre::{self, eyre};
-use file::FileData;
 
 pub mod account;
 pub mod database;
@@ -21,6 +20,7 @@ mod sql_statements;
 use crate::{error::Error, helpers};
 use account::{Account, SecureFields};
 use database::Database;
+use file::FileData;
 use password::Password;
 
 const DATABASE_NAME: &str = "dgruft.db";
@@ -157,8 +157,41 @@ pub fn new_file(username: String, password: String, filename: OsString) -> eyre:
 }
 
 /// Decrypt and edit an existing file.
-pub fn edit_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
-    // TODO
+pub fn open_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Get file path.
+    let mut file_path = acc_path(&username);
+    file_path.push(&filename);
+
+    // Load file.
+    let mut file = match db.get_b64_file_data(&helpers::path_to_string(&file_path)?)? {
+        Some(b64_file_data) => FileData::from_b64(b64_file_data)?,
+        None => return Err(Error::FileNotFoundError(file_path).into()),
+    };
+
+    // Load backup of file.
+    let backup = file.open_decrypted(unlocked_account.key())?;
+
+    // Edit file.
+    file.edit(unlocked_account.key())?;
+
+    // Update file data to match new nonce. Undo changes if nonce change fails.
+    if let Err(err) =
+        db.update_file_content_nonce(file.content_nonce(), &helpers::path_to_string(&file_path)?)
+    {
+        FileData::encrypt_write_with_nonce(
+            &file_path,
+            &backup,
+            unlocked_account.key(),
+            file.content_nonce(),
+        )?;
+        return Err(err.into());
+    };
+
+    println!("Edits to file {filename:?} saved.");
     Ok(())
 }
 
@@ -243,7 +276,7 @@ pub fn new_password(
 }
 
 /// Decrypt and edit an existing password.
-pub fn edit_password(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+pub fn open_password(username: String, password: String, filename: OsString) -> eyre::Result<()> {
     // TODO
     Ok(())
 }

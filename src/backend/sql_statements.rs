@@ -86,3 +86,9 @@ pub const GET_USER_FILES: &str = "
     FROM files
     WHERE owner_username = ?1
 ";
+
+pub const UPDATE_FILE_CONTENT_NONCE: &str = "
+    UPDATE files
+    SET content_nonce = ?1
+    WHERE path = ?2
+";
