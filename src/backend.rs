@@ -2,6 +2,7 @@
 use std::{
     ffi::OsString,
     fs::{self, create_dir, remove_dir_all},
+    io::{self, Write},
     path::PathBuf,
 };
 
@@ -20,8 +21,8 @@ mod sql_statements;
 use crate::{error::Error, helpers};
 use account::{Account, SecureFields};
 use database::Database;
+use password::Password;
 
-const VERBOSE: bool = true;
 const DATABASE_NAME: &str = "dgruft.db";
 
 fn database_path() -> PathBuf {
@@ -37,11 +38,7 @@ fn acc_path(username: &str) -> PathBuf {
 }
 
 fn load_db() -> eyre::Result<Database> {
-    let db = Database::connect(database_path())?;
-    if VERBOSE {
-        println!("Loaded database @ {:?}.", db.path());
-    }
-    Ok(db)
+    Ok(Database::connect(database_path())?)
 }
 
 fn login(db: &mut Database, username: &str, password: &str) -> eyre::Result<SecureFields> {
@@ -55,13 +52,6 @@ fn login(db: &mut Database, username: &str, password: &str) -> eyre::Result<Secu
 
 /// Create a new account and store it in the database.
 pub fn new_account(username: String, password: String) -> eyre::Result<()> {
-    if VERBOSE {
-        println!(
-            "Adding new account with username \"{}\" and password \"{}\"...",
-            username, password,
-        );
-    }
-
     let mut db = load_db()?;
 
     // Create Account.
@@ -72,34 +62,62 @@ pub fn new_account(username: String, password: String) -> eyre::Result<()> {
 
     // Create the directory where this account's files will be stored.
     let acc_dir = acc_path(&username);
-    create_dir(&acc_dir)?;
-    if VERBOSE {
-        println!("Created directory @ {:?}.", acc_dir);
-    }
+    create_dir(acc_dir)?;
+    println!("Account {username} created successfully.");
     Ok(())
 }
 
 /// Delete an existing account and all its files and passwords.
 pub fn delete_account(username: String, password: String, force: bool) -> eyre::Result<()> {
-    // TODO
-    if VERBOSE {
-        println!(
-            "Deleting account with username \"{}\" and password \"{}\"...",
-            username, password,
+    let mut db = load_db()?;
+
+    // Ensure account exists.
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Get all files & passwords of this account.
+    let files = get_files(unlocked_account.username())?;
+    let passwords = get_passwords(unlocked_account.username())?;
+
+    // CLI confirm deletion if not forced.
+    if !force {
+        print!(
+            "Really delete account \"{}\" with {} file(s) and {} password(s)? [y/N] ",
+            unlocked_account.username(),
+            files.len(),
+            passwords.len()
         );
+        let mut input = String::new();
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut input)?;
+        match input.to_lowercase().chars().next() {
+            Some('y') => {}
+            _ => {
+                println!("File deletion cancelled.");
+                return Ok(());
+            }
+        }
     }
 
-    let db = load_db()?;
-    // Delete the directory where this account's files were stored
+    // Delete this account's database entry.
+    if db.delete_account(&username)?.is_none() {
+        return Err(Error::AccountNotFoundError(username).into());
+    }
+
+    // Delete the directory where this account's files were stored.
+    // Restore database entry on failure.
     let acc_dir = acc_path(&username);
-    remove_dir_all(&acc_dir)?;
-
-    // Delete this account's database entry
-    // TODO
-
-    if VERBOSE {
-        println!("Deleted directory @ {:?}.", acc_dir);
+    if let Err(err) = remove_dir_all(acc_dir) {
+        // Undo database changes.
+        for file in files {
+            db.add_new_file_data(file.to_b64()?)?;
+        }
+        for password in passwords {
+            db.add_new_password(password.to_b64())?;
+        }
+        return Err(err.into());
     }
+
+    println!("Account {username} deleted successfully.");
     Ok(())
 }
 
@@ -121,20 +139,13 @@ pub fn new_file(username: String, password: String, filename: OsString) -> eyre:
     )?;
 
     // Add to database— if err then undo file creation.
-    let b64_file_data = match file_data.to_b64() {
-        Some(b64_file_data) => b64_file_data,
-        None => return Err(Error::ToB64Error(filename.to_string_lossy().to_string()).into()),
-    };
-    if let Err(err) = db.add_new_file_data(b64_file_data) {
+    if let Err(err) = db.add_new_file_data(file_data.to_b64()?) {
         // Undo change to disk.
         fs::remove_file(&file_path)?;
         return Err(err.into());
     }
 
-    if VERBOSE {
-        println!("File at {:?} created successfully.", &file_path);
-    }
-
+    println!("File {filename:?} created successfully.");
     Ok(())
 }
 
@@ -152,12 +163,98 @@ pub fn delete_file(username: String, password: String, filename: OsString) -> ey
 
 /// Decrypt and list the names of this account's files.
 pub fn list_files(username: String, password: String) -> eyre::Result<()> {
-    // TODO
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Load list of files.
+    let file_results =
+        if let Some(b64_files_data) = db.get_b64_files(unlocked_account.username())? {
+            b64_files_data.into_iter().map(FileData::from_b64)
+        } else {
+            return Err(Error::AccountNotFoundError(unlocked_account.username().to_owned()).into());
+        };
+
+    let mut files: Vec<String> = vec![];
+    for file_result in file_results {
+        files.push(
+            file_result?
+                .path()
+                .to_owned()
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        );
+    }
+
+    println!("{}", files.join("\n"));
+
     Ok(())
+}
+
+/// Decrypt and get this account's files.
+fn get_files(username: &str) -> eyre::Result<Vec<FileData>> {
+    let db = load_db()?;
+
+    // Load list of files.
+    let file_results = if let Some(b64_files_data) = db.get_b64_files(username)? {
+        b64_files_data.into_iter().map(FileData::from_b64)
+    } else {
+        return Err(Error::AccountNotFoundError(username.to_owned()).into());
+    };
+
+    let mut files: Vec<FileData> = vec![];
+    for file_result in file_results {
+        files.push(file_result?);
+    }
+
+    Ok(files)
 }
 
 /// Decrypt and list the names of this account's passwords.
 pub fn list_passwords(username: String, password: String) -> eyre::Result<()> {
-    // TODO
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Load list of passwords.
+    let password_results =
+        if let Some(b64_passwords) = db.get_b64_passwords(unlocked_account.username())? {
+            b64_passwords.into_iter().map(Password::from_b64)
+        } else {
+            return Err(Error::AccountNotFoundError(unlocked_account.username().to_owned()).into());
+        };
+
+    let mut passwords: Vec<String> = vec![];
+    for password_result in password_results {
+        passwords.push(helpers::bytes_to_utf8(
+            &password_result?
+                .encrypted_name()
+                .decrypt(unlocked_account.key())?,
+            "password",
+        )?);
+    }
+
+    println!("{}", passwords.join("\n"));
+
     Ok(())
+}
+
+/// Get the given account's passwords.
+fn get_passwords(username: &str) -> eyre::Result<Vec<Password>> {
+    let db = load_db()?;
+
+    // Load list of passwords.
+    let password_results = if let Some(b64_passwords) = db.get_b64_passwords(username)? {
+        b64_passwords.into_iter().map(Password::from_b64)
+    } else {
+        return Err(Error::AccountNotFoundError(username.to_owned()).into());
+    };
+
+    let mut passwords: Vec<Password> = vec![];
+    for password_result in password_results {
+        passwords.push(password_result?);
+    }
+
+    Ok(passwords)
 }

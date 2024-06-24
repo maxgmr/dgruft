@@ -155,9 +155,14 @@ impl FileData {
     }
 
     /// Convert this [FileData] to a [Base64FileData] for storage.
-    pub fn to_b64(&self) -> Option<Base64FileData> {
-        Some(Base64FileData {
-            b64_path: helpers::bytes_to_b64(self.path().to_str()?.as_bytes()),
+    pub fn to_b64(&self) -> Result<Base64FileData, Error> {
+        let b64_path = match self.path.to_str() {
+            Some(path_str) => helpers::bytes_to_b64(path_str.as_bytes()),
+            None => return Err(Error::ToB64Error("file data path string".to_owned())),
+        };
+
+        Ok(Base64FileData {
+            b64_path,
             b64_owner_username: helpers::bytes_to_b64(self.owner_username().as_bytes()),
             b64_content_nonce: helpers::bytes_to_b64(self.content_nonce()),
         })

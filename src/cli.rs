@@ -19,12 +19,12 @@ pub struct Cli {
 pub enum Commands {
     /// Manage accounts.
     #[command(arg_required_else_help = true)]
-#[clap(group(
-        ArgGroup::new("account")
-            .required(true)           
-            .args(&["new", "delete", "force_delete"])
-            .requires("username")
-            .requires("password"),
+    #[clap(group(
+            ArgGroup::new("account")
+                .required(true)           
+                .args(&["new", "delete", "force_delete"])
+                .requires("username")
+                .requires("password"),
 ))]
     Account {
         /// Add the chosen account.
