@@ -9,6 +9,8 @@ use crate::helpers;
 #[derive(Parser, Debug)]
 #[command(author, version = helpers::version(), about = "Encrypted storage for passwords and data.")]
 pub struct Cli {
+    /// Account username.
+    pub username: String,
     /// All the possible commands the user can give CLI `dgruft`.
     #[command(subcommand)]
     pub command: Commands,
@@ -23,66 +25,70 @@ pub enum Commands {
             ArgGroup::new("account")
                 .required(true)           
                 .args(&["new", "delete", "force_delete"])
-                .requires("username")
-                .requires("password"),
-))]
+    ))]
     Account {
-        /// Add the chosen account.
+        /// Add the account.
         #[clap(short, long)]
         new: bool,
-        /// Delete the chosen account.
+        /// Delete the account.
         #[clap(short = 'd', long = "delete")]
         delete: bool,
-        /// Delete the chosen account without confirmation.
+        /// Delete the account without confirmation.
         #[clap(short = 'D', long = "deleteforce")]
         force_delete: bool,
-        /// Your account's username.
-        username: String,
-        /// Your account's password.
-        password: String,
     },
 
-    /// Create a new file.
-    #[command(arg_required_else_help = true)]
-    New {
-        /// Your account's username.
-        username: String,
-        /// Your account's password.
-        password: String,
-        /// The name of your new file.
-        filename: OsString,
-    },
-
-    /// Edit an existing file.
-    #[command(arg_required_else_help = true)]
-    Edit {
-        /// Your account's username.
-        username: String,
-        /// Your account's password.
-        password: String,
-        /// The name of the file you wish to edit.
-        filename: OsString,
-    },
-
-    /// List the names of your account's files or passwords.
+    /// Manage files.
     #[command(arg_required_else_help = true)]
     #[clap(group(
-            ArgGroup::new("list")
-                .required(true)
-                .args(&["files", "passwords"])
-                .requires("username")
-                .requires("password")
-))]
-    List {
-        /// List this account's file names.
-       #[clap(short, long)] 
-        files: bool,
-        /// List this account's password names.
+            ArgGroup::new("file")
+                .required(true)           
+                .args(&["new", "open", "list", "delete", "force_delete"])
+    ))]
+    Files {
+        /// Create the file.
+        #[clap(short, long, requires="filename")]
+        new: bool,
+        /// Open the file.
+        #[clap(short, long, requires="filename")]
+        open: bool,
+        /// List all files owned by this account.
         #[clap(short, long)]
-        passwords: bool,
-        /// Your account's username.
-        username: String,
-        /// Your account's password.
-        password: String,
-    }
+        list: bool,
+        /// Delete the file.
+        #[clap(short = 'd', long = "delete", requires="filename")]
+        delete: bool,
+        /// Delete the file without confirmation.
+        #[clap(short = 'D', long = "forcedelete", requires="filename")]
+        force_delete: bool,
+        /// The name of the file.
+        filename: Option<OsString>,
+    },
+
+    /// Manage passwords.
+    #[command(arg_required_else_help = true)]
+    #[clap(group(
+            ArgGroup::new("password")
+                .required(true)           
+                .args(&["new", "open", "list", "delete", "force_delete"])
+    ))]
+    Passwords {
+        /// Create the password.
+        #[clap(short, long, requires="passwordname")]
+        new: bool,
+        /// Open the password.
+        #[clap(short, long, requires="passwordname")]
+        open: bool,
+        /// List all passwords owned by this account.
+        #[clap(short, long)]
+        list: bool,
+        /// Delete the password.
+        #[clap(short = 'd', long = "delete", requires="passwordname")]
+        delete: bool,
+        /// Delete the password without confirmation.
+        #[clap(short = 'D', long = "forcedelete", requires="passwordname")]
+        force_delete: bool,
+        /// The name of the password.
+        passwordname: Option<OsString>,
+    },
 }

@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use color_eyre::eyre;
+use color_eyre::eyre::{self, eyre};
 use file::FileData;
 
 pub mod account;
@@ -52,6 +52,12 @@ fn login(db: &mut Database, username: &str, password: &str) -> eyre::Result<Secu
 
 /// Create a new account and store it in the database.
 pub fn new_account(username: String, password: String) -> eyre::Result<()> {
+    let confirm_password =
+        rpassword::prompt_password(format!("Confirm Password for {}: ", username))?;
+    if confirm_password != password {
+        return Err(eyre!("Passwords for new account do not match."));
+    }
+
     let mut db = load_db()?;
 
     // Create Account.
@@ -63,7 +69,7 @@ pub fn new_account(username: String, password: String) -> eyre::Result<()> {
     // Create the directory where this account's files will be stored.
     let acc_dir = acc_path(&username);
     create_dir(acc_dir)?;
-    println!("Account {username} created successfully.");
+    println!("Account \"{username}\" created successfully.");
     Ok(())
 }
 
@@ -156,7 +162,12 @@ pub fn edit_file(username: String, password: String, filename: OsString) -> eyre
 }
 
 /// Delete a file from the user directory and database.
-pub fn delete_file(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+pub fn delete_file(
+    username: String,
+    password: String,
+    filename: OsString,
+    force: bool,
+) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
@@ -211,6 +222,55 @@ fn get_files(username: &str) -> eyre::Result<Vec<FileData>> {
     Ok(files)
 }
 
+/// Create a new password in the database.
+pub fn new_password(
+    username: String,
+    password: String,
+    passwordname: OsString,
+) -> eyre::Result<()> {
+    // TODO
+    // Load account entry from db.
+    let mut db = load_db()?;
+    let unlocked_account = login(&mut db, &username, &password)?;
+
+    // Get user directory.
+    let mut file_path = acc_path(&username);
+    file_path.push(&passwordname);
+
+    // Create new file.
+    let file_data = FileData::new_with_key(
+        unlocked_account.username(),
+        unlocked_account.key(),
+        &file_path,
+    )?;
+
+    // Add to database— if err then undo file creation.
+    if let Err(err) = db.add_new_file_data(file_data.to_b64()?) {
+        // Undo change to disk.
+        fs::remove_file(&file_path)?;
+        return Err(err.into());
+    }
+
+    println!("Password {passwordname:?} created successfully.");
+    Ok(())
+}
+
+/// Decrypt and edit an existing password.
+pub fn edit_password(username: String, password: String, filename: OsString) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
+
+/// Delete a password from the user directory and database.
+pub fn delete_password(
+    username: String,
+    password: String,
+    passwordname: OsString,
+    force: bool,
+) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
 /// Decrypt and list the names of this account's passwords.
 pub fn list_passwords(username: String, password: String) -> eyre::Result<()> {
     // Load account entry from db.

@@ -7,53 +7,70 @@ use dgruft::{
 };
 
 fn match_args(args: Cli) -> eyre::Result<()> {
+    let password = rpassword::prompt_password(format!("Password for {}: ", args.username))?;
     match args.command {
         Commands::Account {
             new,
             delete,
             force_delete,
-            username,
-            password,
         } => {
             if new {
-                backend::new_account(username, password)?;
+                backend::new_account(args.username, password)?;
             } else if delete {
-                backend::delete_account(username, password, false)?;
+                backend::delete_account(args.username, password, false)?;
             } else if force_delete {
-                backend::delete_account(username, password, true)?;
+                backend::delete_account(args.username, password, true)?;
             } else {
                 return Err(eyre!(
                     "Impossible option combination: new, delete, force_delete all false."
                 ));
             }
         }
-        Commands::New {
-            username,
-            password,
+        Commands::Files {
+            new,
+            open,
+            list,
+            delete,
+            force_delete,
             filename,
         } => {
-            backend::new_file(username, password, filename)?;
-        }
-        Commands::Edit {
-            username,
-            password,
-            filename,
-        } => {
-            backend::edit_file(username, password, filename)?;
-        }
-        Commands::List {
-            files,
-            passwords,
-            username,
-            password,
-        } => {
-            if files {
-                backend::list_files(username, password)?;
-            } else if passwords {
-                backend::list_passwords(username, password)?;
+            if new {
+                backend::new_file(args.username, password, filename.unwrap())?;
+            } else if open {
+                backend::edit_file(args.username, password, filename.unwrap())?;
+            } else if list {
+                backend::list_files(args.username, password)?;
+            } else if delete {
+                backend::delete_file(args.username, password, filename.unwrap(), false)?;
+            } else if force_delete {
+                backend::delete_file(args.username, password, filename.unwrap(), true)?;
             } else {
                 return Err(eyre!(
-                    "Impossible option combination: files, passwords both false."
+                    "Impossible option combination: new, open, list, delete, force_delete all false."
+                ));
+            }
+        }
+        Commands::Passwords {
+            new,
+            open,
+            list,
+            delete,
+            force_delete,
+            passwordname,
+        } => {
+            if new {
+                backend::new_password(args.username, password, passwordname.unwrap())?;
+            } else if open {
+                backend::edit_password(args.username, password, passwordname.unwrap())?;
+            } else if list {
+                backend::list_passwords(args.username, password)?;
+            } else if delete {
+                backend::delete_password(args.username, password, passwordname.unwrap(), false)?;
+            } else if force_delete {
+                backend::delete_password(args.username, password, passwordname.unwrap(), true)?;
+            } else {
+                return Err(eyre!(
+                    "Impossible option combination: new, open, list, delete, force_delete all false."
                 ));
             }
         }
