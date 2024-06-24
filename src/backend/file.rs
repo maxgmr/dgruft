@@ -1,5 +1,6 @@
 //! Functionality related to reading and writing encrypted files.
 use std::{
+    ffi::{OsStr, OsString},
     fs::{File, OpenOptions},
     io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
@@ -15,26 +16,32 @@ use crate::{
 #[derive(Debug)]
 pub struct FileData {
     path: PathBuf,
+    name: OsString,
     owner_username: String,
     content_nonce: [u8; 12],
 }
 impl FileData {
     /// Create a new empty [FileData].
     /// Non-UTF-8 filesystem encodings are unsupported.
-    pub fn new<P>(account: &Account, password: &str, path: P) -> Result<Self, Error>
+    pub fn new<P>(account: &Account, password: &str, name: OsString, path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
-        Self::new_with_content(account, password, b"", path)
+        Self::new_with_content(account, password, name, b"", path)
     }
 
     /// Create a new empty [FileData] with a key.
     /// Non-UTF-8 filesystem encodings are unsupported.
-    pub fn new_with_key<P>(username: &str, key: &[u8; 32], path: P) -> Result<Self, Error>
+    pub fn new_with_key<P>(
+        username: &str,
+        key: &[u8; 32],
+        name: OsString,
+        path: P,
+    ) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
-        Self::new_with_content_and_key(username, key, b"", path)
+        Self::new_with_content_and_key(username, key, name, b"", path)
     }
 
     /// Create a new [FileData] using the given content and key.
@@ -42,6 +49,7 @@ impl FileData {
     pub fn new_with_content_and_key<P>(
         username: &str,
         key: &[u8; 32],
+        name: OsString,
         content: &[u8],
         path: P,
     ) -> Result<Self, Error>
@@ -71,6 +79,7 @@ impl FileData {
 
         Ok(Self {
             path: PathBuf::from(path.as_ref()),
+            name,
             owner_username: username.to_owned(),
             content_nonce,
         })
@@ -81,6 +90,7 @@ impl FileData {
     pub fn new_with_content<P>(
         account: &Account,
         password: &str,
+        name: OsString,
         content: &[u8],
         path: P,
     ) -> Result<Self, Error>
@@ -89,7 +99,7 @@ impl FileData {
     {
         // Get encryption key.
         let key = *account.unlock(password)?.key();
-        Self::new_with_content_and_key(account.username(), &key, content, path)
+        Self::new_with_content_and_key(account.username(), &key, name, content, path)
     }
 
     /// Decrypt then edit the file pointed to by this [FileData] in the computer's default text editor. The file
@@ -140,6 +150,10 @@ impl FileData {
             &helpers::b64_to_bytes(&b64_file_data.b64_path)?,
             "path",
         )?);
+        let name = OsString::from(helpers::bytes_to_utf8(
+            &helpers::b64_to_bytes(&b64_file_data.b64_name)?,
+            "name",
+        )?);
         let owner_username = helpers::bytes_to_utf8(
             &helpers::b64_to_bytes(&b64_file_data.b64_owner_username)?,
             "owner_username",
@@ -149,6 +163,7 @@ impl FileData {
 
         Ok(Self {
             path,
+            name,
             owner_username,
             content_nonce,
         })
@@ -160,9 +175,14 @@ impl FileData {
             Some(path_str) => helpers::bytes_to_b64(path_str.as_bytes()),
             None => return Err(Error::ToB64Error("file data path string".to_owned())),
         };
+        let b64_name = match self.name.to_str() {
+            Some(name_str) => helpers::bytes_to_b64(name_str.as_bytes()),
+            None => return Err(Error::ToB64Error("file data name string".to_owned())),
+        };
 
         Ok(Base64FileData {
             b64_path,
+            b64_name,
             b64_owner_username: helpers::bytes_to_b64(self.owner_username().as_bytes()),
             b64_content_nonce: helpers::bytes_to_b64(self.content_nonce()),
         })
@@ -218,6 +238,11 @@ impl FileData {
         &self.path
     }
 
+    /// Return the name of this [FileData].
+    pub fn name(&self) -> &OsStr {
+        &self.name
+    }
+
     /// Return the owner username of this [FileData].
     pub fn owner_username(&self) -> &str {
         &self.owner_username
@@ -234,6 +259,8 @@ impl FileData {
 pub struct Base64FileData {
     /// File path in base-64 format.
     pub b64_path: String,
+    /// File name in base-64 format.
+    pub b64_name: String,
     /// Owner username in base-64 format.
     pub b64_owner_username: String,
     /// Encrypted content nonce in base-64 format.
@@ -241,9 +268,10 @@ pub struct Base64FileData {
 }
 impl Base64FileData {
     /// Output fields as tuple.
-    pub fn as_tuple(&self) -> (&str, &str, &str) {
+    pub fn as_tuple(&self) -> (&str, &str, &str, &str) {
         (
             &self.b64_path,
+            &self.b64_name,
             &self.b64_owner_username,
             &self.b64_content_nonce,
         )
@@ -273,11 +301,13 @@ Don't tell anybody!!!!";
     #[test]
     fn test_file_read_write() {
         let test_file = "test_files/testfile1";
+        let test_name = "testfile1";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
         let my_file = FileData::new_with_content(
             &my_account,
             TEST_PASSWORD,
+            OsString::from(test_name),
             TEST_CONTENT.as_bytes(),
             test_file,
         )
@@ -296,11 +326,13 @@ Don't tell anybody!!!!";
     fn test_file_edit() {
         // Must be manually verified
         let test_file = "test_files/my_test_file";
+        let test_name = "my_test_file";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
         let mut my_file = FileData::new_with_content(
             &my_account,
             TEST_PASSWORD,
+            OsString::from(test_name),
             TEST_CONTENT.as_bytes(),
             test_file,
         )
@@ -315,11 +347,13 @@ Don't tell anybody!!!!";
     #[test]
     fn test_to_from_b64() {
         let test_file = "test_files/testfile2";
+        let test_name = "testfile2";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let unlocked = my_account.unlock(TEST_PASSWORD).unwrap();
         let my_file = FileData::new_with_content(
             &my_account,
             TEST_PASSWORD,
+            OsString::from(test_name),
             TEST_CONTENT.as_bytes(),
             test_file,
         )
@@ -329,6 +363,7 @@ Don't tell anybody!!!!";
         let my_loaded_file = FileData::from_b64(my_b64_file).unwrap();
 
         let content = my_loaded_file.open_decrypted(unlocked.key()).unwrap();
+        assert_eq!(&OsString::from(test_name), my_loaded_file.name());
         assert_eq!(TEST_CONTENT.as_bytes(), content);
         assert_eq!(
             TEST_CONTENT,
@@ -340,10 +375,18 @@ Don't tell anybody!!!!";
     #[test]
     fn test_already_exists() {
         let test_file = "test_files/testfile3";
+        let test_name = "testfile3";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let other_account = Account::new("123", "456").unwrap();
-        FileData::new(&my_account, TEST_PASSWORD, test_file).unwrap();
-        let dupe = FileData::new(&other_account, "456", test_file).unwrap_err();
+        FileData::new(
+            &my_account,
+            TEST_PASSWORD,
+            OsString::from(test_name),
+            test_file,
+        )
+        .unwrap();
+        let dupe =
+            FileData::new(&other_account, "456", OsString::from(test_name), test_file).unwrap_err();
 
         if let Error::FileAlreadyExistsError(_) = dupe {
         } else {
@@ -355,12 +398,14 @@ Don't tell anybody!!!!";
     #[test]
     fn test_another_account_open() {
         let test_file = "test_files/testfile4";
+        let test_name = "testfile4";
         let my_account = Account::new(TEST_USERNAME, TEST_PASSWORD).unwrap();
         let other_account = Account::new("123", "456").unwrap();
         let other_unlocked = other_account.unlock("456").unwrap();
         let my_file = FileData::new_with_content(
             &my_account,
             TEST_PASSWORD,
+            OsString::from(test_name),
             TEST_CONTENT.as_bytes(),
             test_file,
         )

@@ -60,15 +60,17 @@ pub const GET_USER_PASSWORDS: &str = "
 pub const INSERT_NEW_FILE: &str = "
     INSERT INTO files (
         path,
+        name,
         owner_username,
         content_nonce
     )
-    VALUES (?1, ?2, ?3)
+    VALUES (?1, ?2, ?3, ?4)
 ";
 
 pub const GET_FILE: &str = "
     SELECT
         path,
+        name,
         owner_username,
         content_nonce
     FROM files
@@ -78,6 +80,7 @@ pub const GET_FILE: &str = "
 pub const GET_USER_FILES: &str = "
     SELECT
         path,
+        name,
         owner_username,
         content_nonce
     FROM files

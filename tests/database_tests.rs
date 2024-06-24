@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+
 mod common;
 
 use account::Account;
@@ -15,13 +17,13 @@ fn file_tests() {
     let _ = std::fs::remove_file("test_files/my_other_file");
     let mut db = database::Database::connect(common::TEST_DB_PATH).unwrap();
 
-    let file_name_1 = "my_file";
+    let file_name_1 = OsString::from("my_file");
     let mut file_path_1 = common::get_test_dir();
-    file_path_1.push(file_name_1);
+    file_path_1.push(file_name_1.clone());
 
-    let file_name_2 = "my_other_file";
+    let file_name_2 = OsString::from("my_other_file");
     let mut file_path_2 = common::get_test_dir();
-    file_path_2.push(file_name_2);
+    file_path_2.push(file_name_2.clone());
 
     let username = "my_account_1";
     let password = "this is my passphrase. open sesame!";
@@ -32,8 +34,13 @@ fn file_tests() {
 
     assert!(db.get_b64_files(username).unwrap().unwrap().is_empty());
 
-    let file_1 =
-        FileData::new_with_key(sec_fields.username(), sec_fields.key(), &file_path_1).unwrap();
+    let file_1 = FileData::new_with_key(
+        sec_fields.username(),
+        sec_fields.key(),
+        file_name_1.clone(),
+        &file_path_1,
+    )
+    .unwrap();
     db.add_new_file_data(file_1.to_b64().unwrap()).unwrap();
 
     // Ensure that duplicate files get rejected, even if they come from other accounts.
@@ -47,6 +54,7 @@ fn file_tests() {
     let dupe_file = FileData::new_with_key(
         other_sec_fields.username(),
         other_sec_fields.key(),
+        file_name_2.clone(),
         &file_path_1,
     )
     .unwrap_err();
@@ -59,6 +67,7 @@ fn file_tests() {
     let file_2 = FileData::new_with_content_and_key(
         sec_fields.username(),
         sec_fields.key(),
+        file_name_2.clone(),
         file_2_content.as_bytes(),
         &file_path_2,
     )

@@ -145,8 +145,9 @@ impl Database {
         let rows = statement.query_map([helpers::bytes_to_b64(username.as_bytes())], |row| {
             Ok(Base64FileData {
                 b64_path: row.get::<usize, String>(0)?,
-                b64_owner_username: row.get::<usize, String>(1)?,
-                b64_content_nonce: row.get::<usize, String>(2)?,
+                b64_name: row.get::<usize, String>(1)?,
+                b64_owner_username: row.get::<usize, String>(2)?,
+                b64_content_nonce: row.get::<usize, String>(3)?,
             })
         })?;
         let mut files = Vec::new();
@@ -165,8 +166,9 @@ impl Database {
         let file_data_result = statement.query_row([path_string], |row| {
             Ok(Base64FileData {
                 b64_path: row.get::<usize, String>(0)?,
-                b64_owner_username: row.get::<usize, String>(1)?,
-                b64_content_nonce: row.get::<usize, String>(2)?,
+                b64_name: row.get::<usize, String>(1)?,
+                b64_owner_username: row.get::<usize, String>(2)?,
+                b64_content_nonce: row.get::<usize, String>(3)?,
             })
         });
 

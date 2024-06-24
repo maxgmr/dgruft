@@ -141,6 +141,7 @@ pub fn new_file(username: String, password: String, filename: OsString) -> eyre:
     let file_data = FileData::new_with_key(
         unlocked_account.username(),
         unlocked_account.key(),
+        filename,
         &file_path,
     )?;
 
@@ -151,7 +152,7 @@ pub fn new_file(username: String, password: String, filename: OsString) -> eyre:
         return Err(err.into());
     }
 
-    println!("File {filename:?} created successfully.");
+    println!("File {:?} created successfully.", file_data.name());
     Ok(())
 }
 
@@ -233,23 +234,9 @@ pub fn new_password(
     let mut db = load_db()?;
     let unlocked_account = login(&mut db, &username, &password)?;
 
-    // Get user directory.
-    let mut file_path = acc_path(&username);
-    file_path.push(&passwordname);
+    // Create new password.
 
-    // Create new file.
-    let file_data = FileData::new_with_key(
-        unlocked_account.username(),
-        unlocked_account.key(),
-        &file_path,
-    )?;
-
-    // Add to database— if err then undo file creation.
-    if let Err(err) = db.add_new_file_data(file_data.to_b64()?) {
-        // Undo change to disk.
-        fs::remove_file(&file_path)?;
-        return Err(err.into());
-    }
+    // Add to database.
 
     println!("Password {passwordname:?} created successfully.");
     Ok(())

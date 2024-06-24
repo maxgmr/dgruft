@@ -30,6 +30,7 @@ pub const CREATE_PASSWORDS: &str = "
 pub const CREATE_FILES: &str = "
     CREATE TABLE IF NOT EXISTS files (
         path TEXT NOT NULL PRIMARY KEY,
+        name TEXT NOT NULL,
         owner_username TEXT NOT NULL,
         content_nonce TEXT NOT NULL,
         FOREIGN KEY (owner_username)
