@@ -11,7 +11,7 @@ use super::encrypted::*;
 /// Implementors of this trait can be AES-256 encrypted & converted into an [Encrypted].
 ///
 /// Most implementations of this trait implement *only* [TryIntoEncrypted::try_encrypt_with_both].
-/// The easiest way to do this is to convert the type to [Vec<u8>] then return
+/// The easiest way to do this is to convert the type to a `u8` slice then return
 /// [Encrypted::try_encrypt_bytes_key_nonce].
 pub trait TryIntoEncrypted {
     /// Encrypt using a randomly-generated [Aes256Key] and [Aes256Nonce].
@@ -48,12 +48,12 @@ macro_rules! impl_to_encrypted_byte_vec {
                 nonce: Aes256Nonce,
             ) -> eyre::Result<Encrypted> {
                 let byte_vec: Vec<u8> = match self.try_into() {
-                    Ok(byte_slice) => byte_slice,
+                    Ok(byte_vec) => byte_vec,
                     Err(_) => return Err(
                         eyre!("TryIntoEncrypted: Failed to convert to byte slice.")
                     ),
                 };
-                Encrypted::try_encrypt_bytes_key_nonce(byte_vec, key, nonce)
+                Encrypted::try_encrypt_bytes_key_nonce(&byte_vec, key, nonce)
             }
         })*
     }
@@ -61,14 +61,16 @@ macro_rules! impl_to_encrypted_byte_vec {
 impl_to_encrypted_byte_vec!(Vec<u8>, &[u8], String, &str, Aes256Key, Aes256Nonce);
 impl TryIntoEncrypted for Utf8PathBuf {
     fn try_encrypt_with_both(self, key: Aes256Key, nonce: Aes256Nonce) -> eyre::Result<Encrypted> {
-        let byte_vec: Vec<u8> = self.to_string().as_bytes().to_vec();
-        Encrypted::try_encrypt_bytes_key_nonce(byte_vec, key, nonce)
+        let path_string = self.to_string();
+        let byte_slice: &[u8] = path_string.as_bytes();
+        Encrypted::try_encrypt_bytes_key_nonce(byte_slice, key, nonce)
     }
 }
 impl TryIntoEncrypted for &Utf8Path {
     fn try_encrypt_with_both(self, key: Aes256Key, nonce: Aes256Nonce) -> eyre::Result<Encrypted> {
-        let byte_vec: Vec<u8> = self.to_string().as_bytes().to_vec();
-        Encrypted::try_encrypt_bytes_key_nonce(byte_vec, key, nonce)
+        let path_string = self.to_string();
+        let byte_slice: &[u8] = path_string.as_bytes();
+        Encrypted::try_encrypt_bytes_key_nonce(byte_slice, key, nonce)
     }
 }
 

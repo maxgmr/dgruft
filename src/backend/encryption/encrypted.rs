@@ -18,14 +18,14 @@ pub struct Encrypted {
     nonce: Aes256Nonce,
 }
 impl Encrypted {
-    /// Encrypt a byte vector using a given [Aes256Key] and [Aes256Nonce].
+    /// Encrypt a byte slice using a given [Aes256Key] and [Aes256Nonce].
     pub fn try_encrypt_bytes_key_nonce(
-        byte_vec: Vec<u8>,
+        byte_slice: &[u8],
         key: Aes256Key,
         nonce: Aes256Nonce,
     ) -> eyre::Result<Encrypted> {
         let cipher = Aes256Gcm::new(&key.into());
-        match cipher.encrypt(&nonce.into(), &byte_vec[..]) {
+        match cipher.encrypt(&nonce.into(), &byte_slice[..]) {
             Ok(cipherbytes) => Ok(Self {
                 cipherbytes: cipherbytes.into(),
                 nonce,
