@@ -2,7 +2,7 @@
 use color_eyre::eyre::{self, eyre};
 
 use super::{
-    credentials::Credentials,
+    credential::Credential,
     encryption::encrypted::{new_rand_key, Aes256Key, Encrypted, TryIntoEncrypted},
     file_data::FileData,
     hashing::hashed::{Hash, Hashed, IntoHashed, Salt},
@@ -14,7 +14,7 @@ use super::{
 /// ### Role of the `password`
 ///
 /// - The `password`, when [Hashed] a single time through PBKDF2, serves as the [Aes256Key] for
-/// this account's `key`, the [Aes256Key] used to encrypt and decrypt all [Credentials],
+/// this account's `key`, the [Aes256Key] used to encrypt and decrypt all [Credential],
 /// [FileData], and [FileData] contents owned by this account.
 ///
 /// - The double-[Hashed] `password` is stored in the `dgruft` database. When logging in, the
