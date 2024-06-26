@@ -21,14 +21,14 @@ color-eyre = "0.6"
 # crossterm = { version = "0.27", features = ["event-stream"] }
 directories = "5.0"
 # edit = "0.1"
-# pbkdf2 = "0.12"
-# rand_chacha = "0.3"
+pbkdf2 = "0.12"
+rand_chacha = "0.3"
 # ratatui = { version = "0.27", features = ["serde"] }
 # regex = "1.10"
 # rpassword = "7.3"
 rusqlite = { version = "0.31", features = ["bundled"] }
 # serde = { version = "1.0", features = ["derive"] }
-# sha2 = "0.10"
+sha2 = "0.10"
 # tokio = { version = "1.38", features = ["full"] }
 # toml = "0.8"
 
