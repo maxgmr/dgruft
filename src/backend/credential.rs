@@ -56,6 +56,26 @@ impl Credential {
         &self.owner_username
     }
 
+    /// Get the `encrypted_name` of this [Credential].
+    pub fn encrypted_name(&self) -> &Encrypted {
+        &self.encrypted_name
+    }
+
+    /// Get the `encrypted_username` of this [Credential].
+    pub fn encrypted_username(&self) -> &Encrypted {
+        &self.encrypted_username
+    }
+
+    /// Get the `encrypted_password` of this [Credential].
+    pub fn encrypted_password(&self) -> &Encrypted {
+        &self.encrypted_password
+    }
+
+    /// Get the `encrypted_notes` of this [Credential].
+    pub fn encrypted_notes(&self) -> &Encrypted {
+        &self.encrypted_notes
+    }
+
     /// Decrypt the `encrypted_name` of this [Credential].
     pub fn name<T: TryFromEncrypted>(&self, key: Aes256Key) -> eyre::Result<T> {
         T::try_decrypt(&self.encrypted_name, key)
