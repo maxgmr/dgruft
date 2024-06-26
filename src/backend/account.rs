@@ -23,10 +23,8 @@ use super::{
 #[derive(Debug)]
 pub struct Account {
     username: String,
-    password: String,
-    hashed_password: Hashed<32, 64>,
+    password_salt: Salt<64>,
     dbl_hashed_password: Hashed<32, 64>,
-    key: Aes256Key,
     encrypted_key: Encrypted,
 }
 // TODO: Ideally, all interactions with Accounts, FileDatas, Credentials, etc. should be only
@@ -50,10 +48,8 @@ impl Account {
 
         Ok(Self {
             username: username.to_owned(),
-            password: password.to_owned(),
-            hashed_password,
+            password_salt: *hashed_password.salt(),
             dbl_hashed_password,
-            key,
             encrypted_key,
         })
     }
@@ -63,24 +59,14 @@ impl Account {
         &self.username
     }
 
-    /// Get the `password` of this [Account].
-    pub fn password(&self) -> &str {
-        &self.password
-    }
-
-    /// Get the `hashed_password` of this [Account].
-    pub fn hashed_password(&self) -> &Hashed<32, 64> {
-        &self.hashed_password
+    /// Get the `password_salt` of this [Account].
+    pub fn password_salt(&self) -> &Salt<64> {
+        &self.password_salt
     }
 
     /// Get the `dbl_hashed_password` of this [Account].
     pub fn dbl_hashed_password(&self) -> &Hashed<32, 64> {
         &self.dbl_hashed_password
-    }
-
-    /// Get the `key` of this [Account].
-    pub fn key(&self) -> &Aes256Key {
-        &self.key
     }
 
     /// Get the `encrypted_key` of this [Account].
