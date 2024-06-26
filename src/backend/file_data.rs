@@ -28,4 +28,24 @@ impl FileData {
             contents_nonce,
         }
     }
+
+    /// Return the `path` of this [FileData].
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
+    }
+
+    /// Return the `filename` of this [FileData].
+    pub fn filename(&self) -> &str {
+        &self.filename
+    }
+
+    /// Return the `owner_username` of this [FileData].
+    pub fn owner_username(&self) -> &str {
+        &self.owner_username
+    }
+
+    /// Return the `contents_nonce` of this [FileData].
+    pub fn contents_nonce(&self) -> Aes256Nonce {
+        self.contents_nonce
+    }
 }
