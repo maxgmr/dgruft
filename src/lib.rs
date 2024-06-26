@@ -6,6 +6,6 @@
 
 mod backend;
 mod cli;
-#[cfg(feature = "frontend")]
+#[cfg(feature = "tui")]
 mod tui;
 mod utils;
