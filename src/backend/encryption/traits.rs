@@ -59,20 +59,23 @@ macro_rules! impl_to_encrypted_byte_vec {
     }
 }
 impl_to_encrypted_byte_vec!(Vec<u8>, &[u8], String, &str, Aes256Key, Aes256Nonce);
-impl TryIntoEncrypted for Utf8PathBuf {
-    fn try_encrypt_with_both(self, key: Aes256Key, nonce: Aes256Nonce) -> eyre::Result<Encrypted> {
-        let path_string = self.to_string();
-        let byte_slice: &[u8] = path_string.as_bytes();
-        Encrypted::try_encrypt_bytes_key_nonce(byte_slice, key, nonce)
+
+macro_rules! impl_to_encrypted_camino {
+    ($($t:ty),+) => {
+        $(impl TryIntoEncrypted for $t {
+            fn try_encrypt_with_both(
+                self,
+                key: Aes256Key,
+                nonce: Aes256Nonce
+            ) -> eyre::Result<Encrypted> {
+                let path_string = self.to_string();
+                let byte_slice: &[u8] = path_string.as_bytes();
+                Encrypted::try_encrypt_bytes_key_nonce(byte_slice, key, nonce)
+            }
+        })*
     }
 }
-impl TryIntoEncrypted for &Utf8Path {
-    fn try_encrypt_with_both(self, key: Aes256Key, nonce: Aes256Nonce) -> eyre::Result<Encrypted> {
-        let path_string = self.to_string();
-        let byte_slice: &[u8] = path_string.as_bytes();
-        Encrypted::try_encrypt_bytes_key_nonce(byte_slice, key, nonce)
-    }
-}
+impl_to_encrypted_camino!(Utf8PathBuf, &Utf8Path);
 
 /// Implementors of this trait can be AES-256 decrypted & converted from an [Encrypted].
 ///
