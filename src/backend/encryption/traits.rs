@@ -84,7 +84,7 @@ impl_to_encrypted_camino!(Utf8PathBuf, &Utf8Path);
 /// implementing type.
 pub trait TryFromEncrypted {
     /// Decrypt the [Encrypted] into the implementing type.
-    fn try_decrypt(encrypted: Encrypted, key: Aes256Key) -> eyre::Result<Self>
+    fn try_decrypt(encrypted: &Encrypted, key: Aes256Key) -> eyre::Result<Self>
     where
         Self: Sized;
 }
@@ -93,7 +93,7 @@ pub trait TryFromEncrypted {
 macro_rules! impl_from_encrypted_byte_vec {
     ($($t:ty),+) => {
         $(impl TryFromEncrypted for $t {
-            fn try_decrypt(encrypted: Encrypted, key: Aes256Key) -> eyre::Result<Self> {
+            fn try_decrypt(encrypted: &Encrypted, key: Aes256Key) -> eyre::Result<Self> {
                 let decrypted_bytes: Vec<u8> = encrypted.try_decrypt_bytes(key)?;
                 match Self::try_from(decrypted_bytes) {
                     Ok(decrypted_self) => Ok(decrypted_self),
@@ -110,7 +110,7 @@ impl_from_encrypted_byte_vec!(Vec<u8>, Aes256Key, Aes256Nonce);
 macro_rules! impl_from_encrypted_utf8 {
     ($($t:ty),+) => {
         $(impl TryFromEncrypted for $t {
-            fn try_decrypt(encrypted: Encrypted, key: Aes256Key) -> eyre::Result<Self> {
+            fn try_decrypt(encrypted: &Encrypted, key: Aes256Key) -> eyre::Result<Self> {
                 let decrypted_bytes: Vec<u8> = encrypted.try_decrypt_bytes(key)?;
                 match String::from_utf8(decrypted_bytes) {
                     Ok(decrypted_string) => match Self::try_from(decrypted_string) {

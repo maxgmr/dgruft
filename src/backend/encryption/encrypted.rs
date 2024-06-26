@@ -38,7 +38,7 @@ impl Encrypted {
     }
 
     /// Decrypt this [Encrypted] into a byte vector.
-    pub fn try_decrypt_bytes(self, key: Aes256Key) -> eyre::Result<Vec<u8>> {
+    pub fn try_decrypt_bytes(&self, key: Aes256Key) -> eyre::Result<Vec<u8>> {
         let cipher = Aes256Gcm::new(&key.into());
         match cipher.decrypt(&self.nonce.into(), &self.cipherbytes[..]) {
             Ok(byte_vec) => Ok(byte_vec),
@@ -81,8 +81,8 @@ mod tests {
 
         assert_eq!(encrypted_1, encrypted_2);
 
-        let decrypted_1 = String::try_decrypt(encrypted_1, key).unwrap();
-        let decrypted_2 = String::try_decrypt(encrypted_2, key).unwrap();
+        let decrypted_1 = String::try_decrypt(&encrypted_1, key).unwrap();
+        let decrypted_2 = String::try_decrypt(&encrypted_2, key).unwrap();
 
         assert_eq!(decrypted_1, test_string);
         assert_eq!(decrypted_1, decrypted_2);
@@ -93,7 +93,7 @@ mod tests {
         let test_str = "您好!";
 
         let (encrypted, key) = test_str.try_encrypt_new_key().unwrap();
-        let decrypted = Vec::<u8>::try_decrypt(encrypted, key).unwrap();
+        let decrypted = Vec::<u8>::try_decrypt(&encrypted, key).unwrap();
 
         assert_eq!(test_str.as_bytes(), decrypted);
         assert_eq!(test_str, std::str::from_utf8(&decrypted).unwrap());
@@ -111,8 +111,8 @@ mod tests {
 
         assert_eq!(encrypted_1, encrypted_2);
 
-        let decrypted_1: &[u8] = &Vec::<u8>::try_decrypt(encrypted_1, key).unwrap();
-        let decrypted_2: &[u8] = &Vec::<u8>::try_decrypt(encrypted_2, key).unwrap();
+        let decrypted_1: &[u8] = &Vec::<u8>::try_decrypt(&encrypted_1, key).unwrap();
+        let decrypted_2: &[u8] = &Vec::<u8>::try_decrypt(&encrypted_2, key).unwrap();
 
         assert_eq!(decrypted_1, decrypted_2);
     }
