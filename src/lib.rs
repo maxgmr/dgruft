@@ -4,4 +4,7 @@
 //! recommended*.
 #![warn(missing_docs)]
 
+mod backend;
+mod cli;
+mod tui;
 mod utils;
