@@ -30,13 +30,38 @@ impl Database {
         connection.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true)?;
 
         // Create tables iff they don't exist
-        connection.execute(CREATE_ACCOUNTS, ())?;
-        connection.execute(CREATE_FILES_DATA, ())?;
-        connection.execute(CREATE_CREDENTIALS, ())?;
+        // connection.execute(CREATE_ACCOUNTS, ())?;
+        // connection.execute(CREATE_FILES_DATA, ())?;
+        // connection.execute(CREATE_CREDENTIALS, ())?;
 
         Ok(Self {
             path: path.as_ref().to_path_buf(),
             connection,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::fs;
+
+    const TEST_DB_PATH_STR: &str = "tests/unit-test-db.db";
+
+    fn test_db_path() -> Utf8PathBuf {
+        Utf8PathBuf::from(TEST_DB_PATH_STR)
+    }
+
+    fn refresh_test_db() -> Database {
+        let _ = fs::remove_file(test_db_path());
+        fs::File::create_new(test_db_path()).unwrap();
+        Database::connect(test_db_path()).unwrap()
+    }
+
+    #[test]
+    fn test_db_connect() {
+        let db = refresh_test_db();
+        assert_eq!(db.path, test_db_path());
     }
 }
