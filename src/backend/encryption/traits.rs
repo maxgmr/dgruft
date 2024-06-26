@@ -1,7 +1,7 @@
 //! Functionality related to encrypting and decrypting different types.
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
-    Aes256Gcm, Key,
+    aead::{AeadCore, KeyInit, OsRng},
+    Aes256Gcm,
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};

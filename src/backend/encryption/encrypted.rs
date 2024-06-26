@@ -25,7 +25,7 @@ impl Encrypted {
         nonce: Aes256Nonce,
     ) -> eyre::Result<Encrypted> {
         let cipher = Aes256Gcm::new(&key.into());
-        match cipher.encrypt(&nonce.into(), &byte_slice[..]) {
+        match cipher.encrypt(&nonce.into(), byte_slice) {
             Ok(cipherbytes) => Ok(Self {
                 cipherbytes: cipherbytes.into(),
                 nonce,
