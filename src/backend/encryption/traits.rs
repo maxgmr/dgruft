@@ -1,6 +1,6 @@
 //! Functionality related to encrypting and decrypting different types.
 use aes_gcm::{
-    aead::{AeadCore, KeyInit, OsRng},
+    aead::{AeadCore, OsRng},
     Aes256Gcm,
 };
 use camino::{Utf8Path, Utf8PathBuf};
