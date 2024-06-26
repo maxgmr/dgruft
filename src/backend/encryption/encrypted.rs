@@ -5,6 +5,9 @@ use aes_gcm::{
 };
 use color_eyre::eyre::{self, eyre};
 
+/// Re-export traits.
+pub use super::traits::*;
+
 /// A 12-byte nonce used for AES-256 encryption and decryption.
 pub type Aes256Nonce = [u8; 12];
 

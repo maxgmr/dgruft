@@ -1,2 +1,2 @@
 pub mod hashed;
-pub mod traits;
+mod traits;

@@ -1,2 +1,2 @@
 pub mod encrypted;
-pub mod traits;
+mod traits;

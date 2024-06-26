@@ -2,6 +2,9 @@
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
 
+/// Re-export traits
+pub use super::traits::*;
+
 /// A fixed-length, H-byte cryptographic hash.
 pub type Hash<const H: usize> = [u8; H];
 
