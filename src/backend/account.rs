@@ -20,6 +20,7 @@ use super::{
 /// - The double-[Hashed] `password` is stored in the `dgruft` database. When logging in, the
 /// user's entered password is compared against this one to verify that the correct password was
 /// entered.
+#[derive(Debug)]
 pub struct Account {
     username: String,
     password: String,
