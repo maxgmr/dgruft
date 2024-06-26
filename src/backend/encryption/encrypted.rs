@@ -1,6 +1,6 @@
 //! Functionality related to the [Encrypted] struct.
 use aes_gcm::{
-    aead::{Aead, KeyInit},
+    aead::{Aead, KeyInit, OsRng},
     Aes256Gcm,
 };
 use color_eyre::eyre::{self, eyre};
@@ -52,6 +52,11 @@ impl Encrypted {
     pub fn nonce(&self) -> Aes256Nonce {
         self.nonce
     }
+}
+
+/// Generate a random [Aes256Key].
+pub fn new_rand_key() -> Aes256Key {
+    Aes256Gcm::generate_key(&mut OsRng).into()
 }
 
 #[cfg(test)]

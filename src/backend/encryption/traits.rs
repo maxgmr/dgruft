@@ -19,7 +19,7 @@ pub trait TryIntoEncrypted {
     where
         Self: Sized,
     {
-        let key = Aes256Gcm::generate_key(&mut OsRng).into();
+        let key = new_rand_key();
         Ok((self.try_encrypt_with_key(key)?, key))
     }
 
