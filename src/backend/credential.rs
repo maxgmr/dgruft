@@ -51,6 +51,23 @@ impl Credential {
         })
     }
 
+    /// Create a [Credential] from its fields.
+    pub fn from_fields(
+        owner_username: String,
+        encrypted_name: Encrypted,
+        encrypted_username: Encrypted,
+        encrypted_password: Encrypted,
+        encrypted_notes: Encrypted,
+    ) -> Self {
+        Self {
+            owner_username,
+            encrypted_name,
+            encrypted_username,
+            encrypted_password,
+            encrypted_notes,
+        }
+    }
+
     /// Get the `owner_username` of this [Credential].
     pub fn owner_username(&self) -> &str {
         &self.owner_username

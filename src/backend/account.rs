@@ -54,6 +54,21 @@ impl Account {
         })
     }
 
+    /// Create an [Account] from its fields.
+    pub fn from_fields(
+        username: String,
+        password_salt: Salt<64>,
+        dbl_hashed_password: Hashed<32, 64>,
+        encrypted_key: Encrypted,
+    ) -> Self {
+        Self {
+            username,
+            password_salt,
+            dbl_hashed_password,
+            encrypted_key,
+        }
+    }
+
     /// Get the `username` of this [Account].
     pub fn username(&self) -> &str {
         &self.username

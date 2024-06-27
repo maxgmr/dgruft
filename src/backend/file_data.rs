@@ -29,6 +29,21 @@ impl FileData {
         }
     }
 
+    /// Create a [FileData] from its fields.
+    pub fn from_fields(
+        path: Utf8PathBuf,
+        filename: String,
+        owner_username: String,
+        contents_nonce: Aes256Nonce,
+    ) -> Self {
+        Self {
+            path,
+            filename,
+            owner_username,
+            contents_nonce,
+        }
+    }
+
     /// Return the `path` of this [FileData].
     pub fn path(&self) -> &Utf8Path {
         &self.path

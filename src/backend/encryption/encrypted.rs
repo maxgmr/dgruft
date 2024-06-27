@@ -37,6 +37,11 @@ impl Encrypted {
         }
     }
 
+    /// Create an [Encrypted] from its fields.
+    pub fn from_fields(cipherbytes: Box<[u8]>, nonce: Aes256Nonce) -> Self {
+        Self { cipherbytes, nonce }
+    }
+
     /// Decrypt this [Encrypted] into a byte vector.
     pub fn try_decrypt_bytes(&self, key: Aes256Key) -> eyre::Result<Vec<u8>> {
         let cipher = Aes256Gcm::new(&key.into());

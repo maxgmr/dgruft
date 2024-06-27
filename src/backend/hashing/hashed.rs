@@ -28,6 +28,11 @@ impl<const H: usize, const S: usize> Hashed<H, S> {
         Self { hash, salt }
     }
 
+    /// Create a [Hashed] from its fields.
+    pub fn from_fields(hash: Hash<H>, salt: Salt<S>) -> Self {
+        Self { hash, salt }
+    }
+
     /// Check whether the given bytes match the bytes used to make this [Hashed].
     pub fn check_match(&self, byte_slice: &[u8]) -> bool {
         let hashed_input = Self::hash_with_salt(byte_slice, self.salt);
