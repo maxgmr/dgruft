@@ -17,7 +17,7 @@ pub type Aes256Key = [u8; 32];
 /// An encrypted byte array.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Encrypted {
-    cipherbytes: Box<[u8]>,
+    cipherbytes: Vec<u8>,
     nonce: Aes256Nonce,
 }
 impl Encrypted {
@@ -29,16 +29,13 @@ impl Encrypted {
     ) -> eyre::Result<Encrypted> {
         let cipher = Aes256Gcm::new(&key.into());
         match cipher.encrypt(&nonce.into(), byte_slice) {
-            Ok(cipherbytes) => Ok(Self {
-                cipherbytes: cipherbytes.into(),
-                nonce,
-            }),
+            Ok(cipherbytes) => Ok(Self { cipherbytes, nonce }),
             Err(err) => Err(eyre!("{err:?}")),
         }
     }
 
     /// Create an [Encrypted] from its fields.
-    pub fn from_fields(cipherbytes: Box<[u8]>, nonce: Aes256Nonce) -> Self {
+    pub fn from_fields(cipherbytes: Vec<u8>, nonce: Aes256Nonce) -> Self {
         Self { cipherbytes, nonce }
     }
 
