@@ -172,7 +172,7 @@ macro_rules! impl_into_b64_camino {
         })*
     }
 }
-impl_into_b64_camino!(Utf8PathBuf, &Utf8Path);
+impl_into_b64_camino!(Utf8PathBuf, &Utf8PathBuf, &Utf8Path);
 
 // Helper function to convert b64 strings to UTF-8 path buffers.
 fn b64_to_utf8_path(input: &str) -> eyre::Result<Utf8PathBuf> {
