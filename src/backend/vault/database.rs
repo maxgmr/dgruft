@@ -1,5 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{self};
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
 use super::{sql_schemas::*, sql_statements::*};

@@ -13,13 +13,13 @@ use super::encryption::encrypted::{Aes256Key, Encrypted, TryFromEncrypted, TryIn
 /// - `encrypted_name`: The [Encrypted] name of this [Credential].
 ///
 /// - `encrypted_username`: The [Encrypted] username of this [Credential]. This is the username of
-/// the [Credential] login information, *not* the `dgruft` [Account] username.
+///     the [Credential] login information, *not* the `dgruft` [Account] username.
 ///
 /// - `encrypted_password`: The [Encrypted] password of this [Credential]. This is the password of
-/// the [Credential] login information, *not* the `dgruft` [Account] username.
+///     the [Credential] login information, *not* the `dgruft` [Account] username.
 ///
 /// - `encrypted_notes`: The [Encrypted] notes of this [Credential]. These are user-defined notes
-/// related to the [Credential] information. They can be any text the user wants.
+///     related to the [Credential] information. They can be any text the user wants.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credential {
     owner_username: String,

@@ -1,11 +1,9 @@
 //! Functionality for individual dgruft user accounts.
-use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre;
 
 use super::{
-    credential::Credential,
     encryption::encrypted::{new_rand_key, Aes256Key, Encrypted, TryIntoEncrypted},
-    file_data::FileData,
-    hashing::hashed::{Hash, Hashed, IntoHashed, Salt},
+    hashing::hashed::{Hashed, IntoHashed, Salt},
 };
 
 /// A `dgruft` account with a username, password, and encryption key. Each `dgruft` user has an
@@ -14,12 +12,12 @@ use super::{
 /// ### Role of the `password`
 ///
 /// - The `password`, when [Hashed] a single time through PBKDF2, serves as the [Aes256Key] for
-/// this account's `key`, the [Aes256Key] used to encrypt and decrypt all [Credential],
-/// [FileData], and [FileData] contents owned by this account.
+///     this account's `key`, the [Aes256Key] used to encrypt and decrypt all [Credential],
+///     [FileData], and [FileData] contents owned by this account.
 ///
 /// - The double-[Hashed] `password` is stored in the `dgruft` database. When logging in, the
-/// user's entered password is compared against this one to verify that the correct password was
-/// entered.
+///     user's entered password is compared against this one to verify that the correct password was
+///     entered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
     username: String,

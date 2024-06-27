@@ -3,6 +3,7 @@
 //! This is a personal project— using `dgruft` for storage of real confidential information is *not
 //! recommended*.
 #![warn(missing_docs)]
+#![allow(dead_code)]
 
 mod backend;
 mod cli;
