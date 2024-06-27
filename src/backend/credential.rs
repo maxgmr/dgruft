@@ -20,7 +20,7 @@ use super::encryption::encrypted::{Aes256Key, Encrypted, TryFromEncrypted, TryIn
 ///
 /// - `encrypted_notes`: The [Encrypted] notes of this [Credential]. These are user-defined notes
 /// related to the [Credential] information. They can be any text the user wants.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credential {
     owner_username: String,
     encrypted_name: Encrypted,
