@@ -23,6 +23,12 @@ pub const INSERT_ACCOUNT: &str = "
     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ";
 
+pub const DELETE_ACCOUNT: &str = "
+    DELETE FROM accounts
+    WHERE
+        username = ?1
+";
+
 pub const GET_CREDENTIAL: &str = "
     SELECT
         owner_username,
@@ -55,6 +61,13 @@ pub const INSERT_CREDENTIAL: &str = "
     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
 ";
 
+pub const DELETE_CREDENTIAL: &str = "
+    DELETE FROM credentials
+    WHERE
+        owner_username = ?1
+        AND encrypted_name_cipherbytes = ?2
+";
+
 pub const GET_FILE_DATA: &str = "
     SELECT
         path,
@@ -74,4 +87,10 @@ pub const INSERT_FILE_DATA: &str = "
         content_nonce
     )
     VALUES (?1, ?2, ?3, ?4)
+";
+
+pub const DELETE_FILE_DATA: &str = "
+    DELETE FROM files_data
+    WHERE
+        path = ?1
 ";

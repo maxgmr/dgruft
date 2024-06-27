@@ -1,6 +1,8 @@
+use std::{array::IntoIter, iter::Map};
+
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
-use rusqlite::{config::DbConfig, Connection, OpenFlags};
+use rusqlite::{config::DbConfig, Connection, OpenFlags, ParamsFromIter};
 
 use super::{database_traits::*, sql_schemas::*, sql_statements::*};
 
@@ -60,15 +62,39 @@ impl Database {
         };
         let mut statement = self.connection.prepare(sql_statement)?;
 
-        let b64_key_iter = primary_key_arr.into_iter().map(|e| e.into_b64());
-
-        let query_result = statement.query_row(rusqlite::params_from_iter(b64_key_iter), |row| {
+        let query_result = statement.query_row(Self::get_params(primary_key_arr), |row| {
             Ok(T::try_from_database(row))
         });
         match query_result {
             Ok(entry) => Ok(Some(entry?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(err) => Err(eyre!("{err:?}")),
+        }
+    }
+
+    /// Delete a specific entry based on the given primary key.
+    ///
+    /// Return [Ok<None>] if no entry with that primary key exists in the database.
+    pub fn delete_entry<U, const N: usize>(
+        &self,
+        table: Table,
+        primary_key_arr: [U; N],
+    ) -> eyre::Result<Option<()>>
+    where
+        U: IntoB64,
+    {
+        let sql_statement = match table {
+            Table::Accounts => DELETE_ACCOUNT,
+            Table::Credentials => DELETE_CREDENTIAL,
+            Table::FilesData => DELETE_FILE_DATA,
+        };
+        let mut statement = self.connection.prepare(sql_statement)?;
+
+        let num_rows = statement.execute(Self::get_params(primary_key_arr))?;
+        if num_rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(()))
         }
     }
 
@@ -88,6 +114,17 @@ impl Database {
         self.connection
             .execute(sql_statement, entry.into_database())?;
         Ok(())
+    }
+
+    // Helper function to get SQLite params from an array.
+    fn get_params<U, const N: usize>(
+        primary_key_arr: [U; N],
+    ) -> ParamsFromIter<Map<IntoIter<U, N>, impl FnMut(U) -> String>>
+    where
+        U: IntoB64,
+    {
+        let b64_key_iter = primary_key_arr.into_iter().map(|e| e.into_b64());
+        rusqlite::params_from_iter(b64_key_iter)
     }
 }
 
@@ -240,5 +277,174 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decrypted_contents, "test");
+    }
+
+    #[test]
+    fn delete() {
+        let db = refresh_test_db();
+
+        let dir = Utf8PathBuf::from("tests/");
+
+        let uname_1 = "mr_test";
+        let pwd_1 = "i_love_testing_123";
+        let acc_1 = Account::new(uname_1, pwd_1).unwrap();
+        db.insert_entry(Table::Accounts, acc_1.clone()).unwrap();
+
+        let uname_2 = "mr_awesome";
+        let pwd_2 = "i am so so awesome!";
+        let acc_2 = Account::new(uname_2, pwd_2).unwrap();
+        db.insert_entry(Table::Accounts, acc_2.clone()).unwrap();
+
+        let filename_1_1 = "f_1_1";
+        let mut path_1_1 = dir.clone();
+        path_1_1.push(filename_1_1);
+        let (contents_1_1, key_1_1) = "test".try_encrypt_new_key().unwrap();
+        let f_1_1 = FileData::new(
+            &path_1_1,
+            "f_1_1".to_string(),
+            uname_1.to_string(),
+            contents_1_1.nonce(),
+        );
+        db.insert_entry(Table::FilesData, f_1_1.clone()).unwrap();
+
+        let filename_1_2 = "f_1_2";
+        let mut path_1_2 = dir.clone();
+        path_1_2.push(filename_1_2);
+        let contents_1_2 = "test".try_encrypt_with_key(key_1_1).unwrap();
+        let f_1_2 = FileData::new(
+            &path_1_2,
+            "f_1_2".to_string(),
+            uname_1.to_string(),
+            contents_1_2.nonce(),
+        );
+        db.insert_entry(Table::FilesData, f_1_2.clone()).unwrap();
+
+        let filename_2_1 = "f_2_1";
+        let mut path_2_1 = dir.clone();
+        path_2_1.push(filename_2_1);
+        let (contents_2_1, key_2_1) = "test".try_encrypt_new_key().unwrap();
+        let f_2_1 = FileData::new(
+            &path_2_1,
+            "f_2_1".to_string(),
+            uname_2.to_string(),
+            contents_2_1.nonce(),
+        );
+        db.insert_entry(Table::FilesData, f_2_1.clone()).unwrap();
+
+        let cred_1 = Credential::try_new(uname_1, key_1_1, "cred_1", "u1", "p1", "").unwrap();
+        db.insert_entry(Table::Credentials, cred_1.clone()).unwrap();
+        let cred_2 = Credential::try_new(uname_2, key_2_1, "cred_2", "u2", "p2", "").unwrap();
+        db.insert_entry(Table::Credentials, cred_2.clone()).unwrap();
+
+        assert!(db
+            .select_entry::<Account, &str, 1>(Table::Accounts, [uname_1])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_1_1])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<Credential, &[u8], 2>(
+                Table::Credentials,
+                [
+                    cred_1.owner_username().as_bytes(),
+                    cred_1.encrypted_name().cipherbytes()
+                ]
+            )
+            .unwrap()
+            .is_some());
+
+        db.delete_entry(Table::Accounts, [uname_1]).unwrap();
+        assert!(db
+            .select_entry::<Account, &str, 1>(Table::Accounts, [uname_1])
+            .unwrap()
+            .is_none());
+        assert!(db
+            .select_entry::<Credential, &[u8], 2>(
+                Table::Credentials,
+                [
+                    cred_1.owner_username().as_bytes(),
+                    cred_1.encrypted_name().cipherbytes()
+                ]
+            )
+            .unwrap()
+            .is_none());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_1_1])
+            .unwrap()
+            .is_none());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_1_2])
+            .unwrap()
+            .is_none());
+        assert!(db
+            .select_entry::<Account, &str, 1>(Table::Accounts, [uname_2])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_2_1])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<Credential, &[u8], 2>(
+                Table::Credentials,
+                [
+                    cred_2.owner_username().as_bytes(),
+                    cred_2.encrypted_name().cipherbytes()
+                ]
+            )
+            .unwrap()
+            .is_some());
+
+        db.delete_entry(
+            Table::Credentials,
+            [
+                cred_2.owner_username().as_bytes(),
+                cred_2.encrypted_name().cipherbytes(),
+            ],
+        )
+        .unwrap()
+        .unwrap();
+        assert!(db
+            .select_entry::<Account, &str, 1>(Table::Accounts, [uname_2])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_2_1])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<Credential, &[u8], 2>(
+                Table::Credentials,
+                [
+                    cred_2.owner_username().as_bytes(),
+                    cred_2.encrypted_name().cipherbytes()
+                ]
+            )
+            .unwrap()
+            .is_none());
+
+        db.delete_entry(Table::FilesData, [&path_2_1])
+            .unwrap()
+            .unwrap();
+        assert!(db
+            .select_entry::<Account, &str, 1>(Table::Accounts, [uname_2])
+            .unwrap()
+            .is_some());
+        assert!(db
+            .select_entry::<FileData, &Utf8Path, 1>(Table::FilesData, [&path_2_1])
+            .unwrap()
+            .is_none());
+        assert!(db
+            .select_entry::<Credential, &[u8], 2>(
+                Table::Credentials,
+                [
+                    cred_2.owner_username().as_bytes(),
+                    cred_2.encrypted_name().cipherbytes()
+                ]
+            )
+            .unwrap()
+            .is_none());
     }
 }
