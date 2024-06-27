@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS credentials (
     encrypted_notes_cipherbytes TEXT NOT NULL,
     encrypted_notes_nonce TEXT NOT NULL,
     FOREIGN KEY (owner_username)
-        REFERENCES user_credentials(username)
+        REFERENCES accounts(username)
         ON DELETE CASCADE,
     PRIMARY KEY(owner_username, encrypted_name_cipherbytes)
 )
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS files_data (
     owner_username TEXT NOT NULL,
     content_nonce TEXT NOT NULL,
     FOREIGN KEY (owner_username)
-        REFERENCES user_credentials(username)
+        REFERENCES accounts(username)
         ON DELETE CASCADE
 )
 ";
