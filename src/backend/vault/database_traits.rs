@@ -8,7 +8,7 @@ use color_eyre::eyre::{self, eyre};
 use super::super::{
     account::Account,
     credential::Credential,
-    encryption::encrypted::{Aes256Nonce, Encrypted},
+    encryption::encrypted::{Aes256Key, Aes256Nonce, Encrypted},
     file_data::FileData,
     hashing::hashed::{Hash, Hashed, Salt},
 };
@@ -27,12 +27,12 @@ impl IntoDatabase for Account {
     type FixedSizeStringArray = [String; 6];
     fn into_database(self) -> Self::FixedSizeStringArray {
         [
-            into_b64(self.username()),
-            into_b64(self.password_salt()),
-            into_b64(self.dbl_hashed_password().hash()),
-            into_b64(self.dbl_hashed_password().salt()),
-            into_b64(self.encrypted_key().cipherbytes()),
-            into_b64(self.encrypted_key().nonce()),
+            self.username().into_b64(),
+            self.password_salt().into_b64(),
+            self.dbl_hashed_password().hash().into_b64(),
+            self.dbl_hashed_password().salt().into_b64(),
+            self.encrypted_key().cipherbytes().into_b64(),
+            self.encrypted_key().nonce().into_b64(),
         ]
     }
 }
@@ -40,15 +40,15 @@ impl IntoDatabase for Credential {
     type FixedSizeStringArray = [String; 9];
     fn into_database(self) -> Self::FixedSizeStringArray {
         [
-            into_b64(self.owner_username()),
-            into_b64(self.encrypted_name().cipherbytes()),
-            into_b64(self.encrypted_name().nonce()),
-            into_b64(self.encrypted_username().cipherbytes()),
-            into_b64(self.encrypted_username().nonce()),
-            into_b64(self.encrypted_password().cipherbytes()),
-            into_b64(self.encrypted_password().nonce()),
-            into_b64(self.encrypted_notes().cipherbytes()),
-            into_b64(self.encrypted_notes().nonce()),
+            self.owner_username().into_b64(),
+            self.encrypted_name().cipherbytes().into_b64(),
+            self.encrypted_name().nonce().into_b64(),
+            self.encrypted_username().cipherbytes().into_b64(),
+            self.encrypted_username().nonce().into_b64(),
+            self.encrypted_password().cipherbytes().into_b64(),
+            self.encrypted_password().nonce().into_b64(),
+            self.encrypted_notes().cipherbytes().into_b64(),
+            self.encrypted_notes().nonce().into_b64(),
         ]
     }
 }
@@ -56,10 +56,10 @@ impl IntoDatabase for FileData {
     type FixedSizeStringArray = [String; 4];
     fn into_database(self) -> Self::FixedSizeStringArray {
         [
-            into_b64_camino(self.path()),
-            into_b64(self.filename()),
-            into_b64(self.owner_username()),
-            into_b64(self.contents_nonce()),
+            self.path().into_b64(),
+            self.filename().into_b64(),
+            self.owner_username().into_b64(),
+            self.contents_nonce().into_b64(),
         ]
     }
 }
@@ -147,34 +147,34 @@ fn hashed_from_db<const H: usize, const S: usize>(
     Ok(Hashed::from_fields(hash, salt))
 }
 
-// Helper function to ensure database array size is ok.
-fn assert_ok_size(expected_size: usize, arr: &[String]) -> eyre::Result<()> {
-    if expected_size != arr.len() {
-        Err(eyre!(
-            "TryFromDatabase: Expected length {expected_size} from database, got {}.",
-            arr.len()
-        ))
-    } else {
-        Ok(())
+/// Implementors of this trait can be converted to a base-64-encoded String.
+pub trait IntoB64 {
+    fn into_b64(self) -> String;
+}
+
+// Implementations.
+macro_rules! impl_into_b64_byte_vec {
+    ($($t:ty),+) => {
+        $(impl IntoB64 for $t {
+            fn into_b64(self) -> String {
+                let bytes_vec: Vec<u8> = self.into();
+                Base64::encode_string(&bytes_vec)
+            }
+        })*
     }
 }
-
-// Helper function to convert camino structs to b64.
-fn into_b64_camino<T>(input: T) -> String
-where
-    T: AsRef<Utf8Path>,
-{
-    Base64::encode_string(input.as_ref().as_str().as_bytes())
+impl_into_b64_byte_vec!(Vec<u8>, &[u8], String, &str, Aes256Key, Aes256Nonce);
+macro_rules! impl_into_b64_camino {
+    ($($t:ty),+) => {
+        $(impl IntoB64 for $t {
+            fn into_b64(self) -> String {
+                let path: &Utf8Path = self.as_ref();
+                Base64::encode_string(path.as_str().as_bytes())
+            }
+        })*
+    }
 }
-
-// Helper function to convert things to b64.
-fn into_b64<T>(input: T) -> String
-where
-    T: Into<Vec<u8>>,
-{
-    let bytes_vec: Vec<u8> = input.into();
-    Base64::encode_string(&bytes_vec)
-}
+impl_into_b64_camino!(Utf8PathBuf, &Utf8Path);
 
 // Helper function to convert b64 strings to UTF-8 path buffers.
 fn b64_to_utf8_path(input: &str) -> eyre::Result<Utf8PathBuf> {
