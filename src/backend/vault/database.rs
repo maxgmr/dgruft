@@ -2,12 +2,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
 use rusqlite::{config::DbConfig, Connection, OpenFlags};
 
-use super::{
-    super::{account::Account, encryption::encrypted::Encrypted, hashing::hashed::Hashed},
-    database_traits::*,
-    sql_schemas::*,
-    sql_statements::*,
-};
+use super::{database_traits::*, sql_schemas::*, sql_statements::*};
 
 /// All the tables stored in the [Database]. Used to determine [Database] function behaviour.
 pub enum Table {
@@ -105,8 +100,9 @@ mod tests {
 
     use super::{
         super::super::{
+            account::Account,
             credential::Credential,
-            encryption::encrypted::{new_rand_key, TryFromEncrypted, TryIntoEncrypted},
+            encryption::encrypted::{new_rand_key, Encrypted, TryFromEncrypted, TryIntoEncrypted},
             file_data::FileData,
         },
         *,
