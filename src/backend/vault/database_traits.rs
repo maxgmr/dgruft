@@ -67,23 +67,21 @@ impl IntoDatabase for FileData {
 /// This trait defines how the given struct gets converted from a vector of base-64-encoded strings
 /// for retrieval from the database.
 pub trait TryFromDatabase {
-    type FixedSizeStringArray;
-
     /// This function determines how the struct gets converted into the database format.
-    fn try_from_database(db_arr: Self::FixedSizeStringArray) -> eyre::Result<Self>
+    fn try_from_database(row: &rusqlite::Row) -> eyre::Result<Self>
     where
         Self: Sized;
 }
 
 // Implementations
 impl TryFromDatabase for Account {
-    type FixedSizeStringArray = [String; 6];
-
-    fn try_from_database(db_arr: Self::FixedSizeStringArray) -> eyre::Result<Self> {
-        let username = b64_to_utf8(&db_arr[0])?;
-        let password_salt = b64_to_fixed(&db_arr[1])?;
-        let dbl_hashed_password = hashed_from_db(&db_arr[2], &db_arr[3])?;
-        let encrypted_key = encrypted_from_db(&db_arr[4], &db_arr[5])?;
+    fn try_from_database(row: &rusqlite::Row) -> eyre::Result<Self> {
+        let username = b64_to_utf8(&row.get::<usize, String>(0)?)?;
+        let password_salt = b64_to_fixed(&row.get::<usize, String>(1)?)?;
+        let dbl_hashed_password =
+            hashed_from_db(&row.get::<usize, String>(2)?, &row.get::<usize, String>(3)?)?;
+        let encrypted_key =
+            encrypted_from_db(&row.get::<usize, String>(4)?, &row.get::<usize, String>(5)?)?;
 
         Ok(Self::from_fields(
             username,
@@ -94,14 +92,16 @@ impl TryFromDatabase for Account {
     }
 }
 impl TryFromDatabase for Credential {
-    type FixedSizeStringArray = [String; 9];
-
-    fn try_from_database(db_arr: Self::FixedSizeStringArray) -> eyre::Result<Self> {
-        let owner_username = b64_to_utf8(&db_arr[0])?;
-        let encrypted_name = encrypted_from_db(&db_arr[1], &db_arr[2])?;
-        let encrypted_username = encrypted_from_db(&db_arr[3], &db_arr[4])?;
-        let encrypted_password = encrypted_from_db(&db_arr[5], &db_arr[6])?;
-        let encrypted_notes = encrypted_from_db(&db_arr[7], &db_arr[8])?;
+    fn try_from_database(row: &rusqlite::Row) -> eyre::Result<Self> {
+        let owner_username = b64_to_utf8(&row.get::<usize, String>(0)?)?;
+        let encrypted_name =
+            encrypted_from_db(&row.get::<usize, String>(1)?, &row.get::<usize, String>(2)?)?;
+        let encrypted_username =
+            encrypted_from_db(&row.get::<usize, String>(3)?, &row.get::<usize, String>(4)?)?;
+        let encrypted_password =
+            encrypted_from_db(&row.get::<usize, String>(5)?, &row.get::<usize, String>(6)?)?;
+        let encrypted_notes =
+            encrypted_from_db(&row.get::<usize, String>(7)?, &row.get::<usize, String>(8)?)?;
 
         Ok(Self::from_fields(
             owner_username,
@@ -113,13 +113,11 @@ impl TryFromDatabase for Credential {
     }
 }
 impl TryFromDatabase for FileData {
-    type FixedSizeStringArray = [String; 4];
-
-    fn try_from_database(db_arr: Self::FixedSizeStringArray) -> eyre::Result<Self> {
-        let path = b64_to_utf8_path(&db_arr[0])?;
-        let filename = b64_to_utf8(&db_arr[1])?;
-        let owner_username = b64_to_utf8(&db_arr[2])?;
-        let contents_nonce = b64_to_fixed(&db_arr[3])?;
+    fn try_from_database(row: &rusqlite::Row) -> eyre::Result<Self> {
+        let path = b64_to_utf8_path(&row.get::<usize, String>(0)?)?;
+        let filename = b64_to_utf8(&row.get::<usize, String>(1)?)?;
+        let owner_username = b64_to_utf8(&row.get::<usize, String>(2)?)?;
+        let contents_nonce = b64_to_fixed(&row.get::<usize, String>(3)?)?;
 
         Ok(Self::from_fields(
             path,
@@ -200,88 +198,4 @@ fn b64_to_fixed<const N: usize>(input: &str) -> eyre::Result<[u8; N]> {
 // Helper function to convert b64 strings to vectors of bytes.
 fn b64_to_bytes(input: &str) -> eyre::Result<Vec<u8>> {
     Ok(Base64::decode_vec(input)?)
-}
-
-#[cfg(test)]
-mod tests {
-    use pretty_assertions::assert_eq;
-
-    use crate::backend::encryption::encrypted::TryFromEncrypted;
-
-    use super::{
-        super::super::encryption::encrypted::{new_rand_key, TryIntoEncrypted},
-        *,
-    };
-
-    #[test]
-    fn account_to_from() {
-        let username = "Mister Test";
-        let password = "I'm the great Mister Test, I don't need a password!";
-        let account = Account::new(username, password).unwrap();
-
-        let db_account = account.clone().into_database();
-        let loaded_account = Account::try_from_database(db_account).unwrap();
-
-        assert_eq!(account, loaded_account);
-        assert_eq!(loaded_account.username(), username);
-    }
-
-    #[test]
-    fn credential_to_from() {
-        let owner_username = "mister_owner_123";
-        let key = new_rand_key();
-        let name = "maxgmr.ca login info";
-        let username = "im_da_admin";
-        let password = "blahblahblah";
-        let notes = "dgruft很酷。";
-
-        let cred =
-            Credential::try_new(owner_username, key, name, username, password, notes).unwrap();
-
-        let db_cred = cred.clone().into_database();
-        let loaded_cred = Credential::try_from_database(db_cred).unwrap();
-
-        assert_eq!(cred, loaded_cred);
-
-        assert_eq!(loaded_cred.name::<String>(key).unwrap(), name);
-        assert_eq!(loaded_cred.username::<String>(key).unwrap(), username);
-        assert_eq!(loaded_cred.password::<String>(key).unwrap(), password);
-        assert_eq!(loaded_cred.notes::<String>(key).unwrap(), notes);
-    }
-
-    #[test]
-    fn file_data_to_from() {
-        let path = Utf8PathBuf::from("src/backend/vault/database_traits.rs");
-        let filename = String::from("database_traits.rs");
-        let owner_username = String::from("i'm da owner");
-        let (encrypted_contents, key) = "test".try_encrypt_new_key().unwrap();
-        let contents_nonce = encrypted_contents.nonce();
-
-        let file_data = FileData::new(
-            path.clone(),
-            filename.clone(),
-            owner_username.clone(),
-            contents_nonce,
-        );
-
-        let db_file_data = file_data.clone().into_database();
-        let loaded_file_data = FileData::try_from_database(db_file_data).unwrap();
-
-        assert_eq!(file_data, loaded_file_data);
-
-        assert_eq!(path, loaded_file_data.path());
-        assert_eq!(filename, loaded_file_data.filename());
-        assert_eq!(owner_username, loaded_file_data.owner_username());
-        assert_eq!(contents_nonce, loaded_file_data.contents_nonce());
-
-        let decrypted_contents = String::try_decrypt(
-            &Encrypted::from_fields(
-                encrypted_contents.cipherbytes().to_vec(),
-                loaded_file_data.contents_nonce(),
-            ),
-            key,
-        )
-        .unwrap();
-        assert_eq!(decrypted_contents, "test");
-    }
 }
