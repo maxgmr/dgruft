@@ -30,9 +30,9 @@ impl Database {
         connection.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, true)?;
 
         // Create tables iff they don't exist
-        // connection.execute(CREATE_ACCOUNTS, ())?;
-        // connection.execute(CREATE_FILES_DATA, ())?;
-        // connection.execute(CREATE_CREDENTIALS, ())?;
+        connection.execute(CREATE_ACCOUNTS, ())?;
+        connection.execute(CREATE_FILES_DATA, ())?;
+        connection.execute(CREATE_CREDENTIALS, ())?;
 
         Ok(Self {
             path: path.as_ref().to_path_buf(),
