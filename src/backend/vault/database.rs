@@ -2,7 +2,7 @@ use std::{array::IntoIter, iter::Map};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
-use rusqlite::{config::DbConfig, Connection, OpenFlags, ParamsFromIter};
+use rusqlite::{config::DbConfig, params_from_iter, Connection, OpenFlags};
 
 use super::{database_traits::*, sql_schemas::*, sql_statements::*};
 
@@ -11,6 +11,13 @@ pub enum Table {
     Accounts,
     Credentials,
     FilesData,
+}
+
+/// All the actions that involve modifying the [Database].
+pub enum Action {
+    Insert,
+    Delete,
+    Update,
 }
 
 #[derive(Debug)]
@@ -61,8 +68,9 @@ impl Database {
             Table::FilesData => GET_FILE_DATA,
         };
         let mut statement = self.connection.prepare(sql_statement)?;
+        let params = Self::get_params_iter(primary_key_arr);
 
-        let query_result = statement.query_row(Self::get_params(primary_key_arr), |row| {
+        let query_result = statement.query_row(params_from_iter(params), |row| {
             Ok(T::try_from_database(row))
         });
         match query_result {
@@ -72,14 +80,58 @@ impl Database {
         }
     }
 
-    /// Delete a specific entry based on the given primary key.
+    /// Modify the database, then execute a given function.
     ///
-    /// Return [Ok<None>] if no entry with that primary key exists in the database.
+    /// The function in question is typically a modification to a filesystem or something else that
+    /// should be consistent with the database.
+    ///
+    /// Should any errors be encountered whilst executing the function or modifying the database
+    /// itself, all changes made to the database will not be committed.
+    pub fn do_transaction<F, A, U, const N: usize>(
+        &mut self,
+        action: Action,
+        table: Table,
+        params: [U; N],
+        mut f: F,
+        args: A,
+    ) -> eyre::Result<()>
+    where
+        F: FnMut(A) -> eyre::Result<()>,
+        U: IntoB64,
+    {
+        let savepoint = self.connection.savepoint()?;
+
+        match action {
+            Action::Insert => Err(eyre!("unimplemented :("))?,
+            Action::Delete => Self::delete_entry_at_conn(&savepoint, table, params)?,
+            Action::Update => Err(eyre!("unimplemented :("))?,
+        };
+
+        // If this function fails, then the database will not be modified.
+        f(args)?;
+
+        savepoint.commit()?;
+        Ok(())
+    }
+
+    /// Delete a specific entry based on the given primary key.
     pub fn delete_entry<U, const N: usize>(
         &self,
         table: Table,
         primary_key_arr: [U; N],
-    ) -> eyre::Result<Option<()>>
+    ) -> eyre::Result<()>
+    where
+        U: IntoB64,
+    {
+        Self::delete_entry_at_conn(&self.connection, table, primary_key_arr)
+    }
+
+    // Helper function— connection-agnostic entry deletion.
+    fn delete_entry_at_conn<U, const N: usize>(
+        connection: &Connection,
+        table: Table,
+        primary_key_arr: [U; N],
+    ) -> eyre::Result<()>
     where
         U: IntoB64,
     {
@@ -88,13 +140,14 @@ impl Database {
             Table::Credentials => DELETE_CREDENTIAL,
             Table::FilesData => DELETE_FILE_DATA,
         };
-        let mut statement = self.connection.prepare(sql_statement)?;
+        let mut statement = connection.prepare(sql_statement)?;
+        let params = Self::get_params_iter(primary_key_arr);
 
-        let num_rows = statement.execute(Self::get_params(primary_key_arr))?;
+        let num_rows = statement.execute(params_from_iter(params))?;
         if num_rows == 0 {
-            Ok(None)
+            Err(eyre!("Params returned no rows to delete."))
         } else {
-            Ok(Some(()))
+            Ok(())
         }
     }
 
@@ -117,21 +170,23 @@ impl Database {
     }
 
     // Helper function to get SQLite params from an array.
-    fn get_params<U, const N: usize>(
-        primary_key_arr: [U; N],
-    ) -> ParamsFromIter<Map<IntoIter<U, N>, impl FnMut(U) -> String>>
+    fn get_params_iter<U, const N: usize>(
+        params_arr: [U; N],
+    ) -> Map<IntoIter<U, N>, impl FnMut(U) -> String>
     where
         U: IntoB64,
     {
-        let b64_key_iter = primary_key_arr.into_iter().map(|e| e.into_b64());
-        rusqlite::params_from_iter(b64_key_iter)
+        params_arr.into_iter().map(|e| e.into_b64())
     }
 }
 
 // Run with `cargo t -- --test-threads=1`
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{
+        fs::{self, remove_file, File},
+        io::Write,
+    };
 
     use pretty_assertions::assert_eq;
 
@@ -404,7 +459,6 @@ mod tests {
                 cred_2.encrypted_name().cipherbytes(),
             ],
         )
-        .unwrap()
         .unwrap();
         assert!(db
             .select_entry::<Account, &str, 1>(Table::Accounts, [uname_2])
@@ -425,9 +479,7 @@ mod tests {
             .unwrap()
             .is_none());
 
-        db.delete_entry(Table::FilesData, [&path_2_1])
-            .unwrap()
-            .unwrap();
+        db.delete_entry(Table::FilesData, [&path_2_1]).unwrap();
         assert!(db
             .select_entry::<Account, &str, 1>(Table::Accounts, [uname_2])
             .unwrap()
@@ -446,5 +498,67 @@ mod tests {
             )
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn rollback_delete_fail() {
+        let file_path = Utf8PathBuf::from("tests/should_be_deleted.txt");
+        let _ = delete_a_file(&file_path);
+
+        fn make_a_file(path: &Utf8Path, bytes: &[u8]) -> eyre::Result<()> {
+            let mut f = File::create_new(path)?;
+            f.write_all(bytes)?;
+            Ok(())
+        }
+
+        fn delete_a_file(path: &Utf8Path) -> eyre::Result<()> {
+            remove_file(path)?;
+            Ok(())
+        }
+
+        let mut db = refresh_test_db();
+
+        let username = "abc";
+        let password = "123";
+        let account = Account::new(username, password).unwrap();
+
+        db.insert_entry(Table::Accounts, account).unwrap();
+        make_a_file(&file_path, b"blah blah blah").unwrap();
+        fs::metadata(&file_path).unwrap();
+
+        let _ = db
+            .do_transaction(
+                Action::Delete,
+                Table::Credentials,
+                ["wrong primary key field count! please preserve my file..."],
+                delete_a_file,
+                &file_path,
+            )
+            .unwrap_err();
+
+        fs::metadata(&file_path).unwrap();
+
+        let _ = db
+            .do_transaction(
+                Action::Delete,
+                Table::Accounts,
+                ["misspelled username! i hope my file doesn't actually get deleted!"],
+                delete_a_file,
+                &file_path,
+            )
+            .unwrap_err();
+
+        fs::metadata(&file_path).unwrap();
+
+        db.do_transaction(
+            Action::Delete,
+            Table::Accounts,
+            ["abc"],
+            delete_a_file,
+            &file_path,
+        )
+        .unwrap();
+
+        fs::metadata(&file_path).unwrap_err();
     }
 }
