@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS files_data (
     path TEXT PRIMARY KEY,
     filename TEXT NOT NULL,
     owner_username TEXT NOT NULL,
-    content_nonce TEXT NOT NULL,
+    contents_nonce TEXT NOT NULL,
     FOREIGN KEY (owner_username)
         REFERENCES accounts(username)
         ON DELETE CASCADE

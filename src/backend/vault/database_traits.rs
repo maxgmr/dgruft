@@ -5,13 +5,139 @@ use base64ct::{Base64, Encoding};
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
 
-use super::super::{
-    account::Account,
-    credential::Credential,
-    encryption::encrypted::{Aes256Key, Aes256Nonce, Encrypted},
-    file_data::FileData,
-    hashing::hashed::{Hash, Hashed, Salt},
+use super::{
+    super::{
+        account::Account,
+        credential::Credential,
+        encryption::encrypted::{Aes256Key, Aes256Nonce, Encrypted},
+        file_data::FileData,
+        hashing::hashed::{Hash, Hashed, Salt},
+    },
+    sql_statements::*,
 };
+
+pub trait HasSqlStatements {
+    /// This enum defines the names of the fields that can be updated.
+    type UpdateField;
+    /// This function defines the SQLite statement used to insert an entry of this type.
+    fn sql_insert() -> &'static str;
+
+    /// This function defines the SQLite statement used to delete an entry of this type.
+    fn sql_delete() -> &'static str;
+
+    /// This function defines the SQLite statement used to select an entry of this type.
+    fn sql_select() -> &'static str;
+
+    /// This function defines the SQLite statement used to update an entry of this type.
+    fn sql_update(field: Self::UpdateField) -> &'static str;
+}
+
+// Implementations
+/// All the fields of [Account] entries that may be updated.
+pub enum AccountUpdateField {
+    PasswordSalt,
+    DblHashedPasswordHash,
+    DblHashedPasswordSalt,
+    EncryptedKeyCipherbytes,
+    EncryptedKeyNonce,
+}
+impl HasSqlStatements for Account {
+    type UpdateField = AccountUpdateField;
+
+    fn sql_insert() -> &'static str {
+        INSERT_ACCOUNT
+    }
+
+    fn sql_delete() -> &'static str {
+        DELETE_ACCOUNT
+    }
+
+    fn sql_select() -> &'static str {
+        SELECT_ACCOUNT
+    }
+
+    fn sql_update(field: Self::UpdateField) -> &'static str {
+        match field {
+            AccountUpdateField::PasswordSalt => UPDATE_ACCOUNT_PASSWORD_SALT,
+            AccountUpdateField::DblHashedPasswordHash => UPDATE_ACCOUNT_DBL_HASHED_PASSWORD_HASH,
+            AccountUpdateField::DblHashedPasswordSalt => UPDATE_ACCOUNT_DBL_HASHED_PASSWORD_SALT,
+            AccountUpdateField::EncryptedKeyCipherbytes => UPDATE_ACCOUNT_ENCRYPTED_KEY_CIPHERBYTES,
+            AccountUpdateField::EncryptedKeyNonce => UPDATE_ACCOUNT_ENCRYPTED_KEY_NONCE,
+        }
+    }
+}
+
+/// All the fields of [Credential] entries that may be updated.
+pub enum CredentialUpdateField {
+    EncryptedUsernameCipherbytes,
+    EncryptedUsernameNonce,
+    EncryptedPasswordCipherbytes,
+    EncryptedPasswordNonce,
+    EncryptedNotesCipherbytes,
+    EncryptedNotesNonce,
+}
+impl HasSqlStatements for Credential {
+    type UpdateField = CredentialUpdateField;
+
+    fn sql_insert() -> &'static str {
+        INSERT_CREDENTIAL
+    }
+
+    fn sql_delete() -> &'static str {
+        DELETE_CREDENTIAL
+    }
+
+    fn sql_select() -> &'static str {
+        SELECT_CREDENTIAL
+    }
+
+    fn sql_update(field: Self::UpdateField) -> &'static str {
+        match field {
+            CredentialUpdateField::EncryptedUsernameCipherbytes => {
+                UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_CIPHERBYTES
+            }
+            CredentialUpdateField::EncryptedUsernameNonce => {
+                UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE
+            }
+            CredentialUpdateField::EncryptedPasswordCipherbytes => {
+                UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_CIPHERBYTES
+            }
+            CredentialUpdateField::EncryptedPasswordNonce => {
+                UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_NONCE
+            }
+            CredentialUpdateField::EncryptedNotesCipherbytes => {
+                UPDATE_CREDENTIAL_ENCRYPTED_NOTES_CIPHERBYTES
+            }
+            CredentialUpdateField::EncryptedNotesNonce => UPDATE_CREDENTIAL_ENCRYPTED_NOTES_NONCE,
+        }
+    }
+}
+
+/// All the fields of [FileData] entries that may be updated.
+pub enum FileDataUpdateField {
+    ContentsNonce,
+}
+impl HasSqlStatements for FileData {
+    type UpdateField = FileDataUpdateField;
+
+    fn sql_insert() -> &'static str {
+        INSERT_FILE_DATA
+    }
+
+    fn sql_delete() -> &'static str {
+        DELETE_FILE_DATA
+    }
+
+    fn sql_select() -> &'static str {
+        SELECT_FILE_DATA
+    }
+
+    fn sql_update(field: Self::UpdateField) -> &'static str {
+        match field {
+            FileDataUpdateField::ContentsNonce => UPDATE_FILE_DATA_CONTENTS_NONCE,
+        }
+    }
+}
 
 /// This trait defines how the given struct gets converted into an array of base-64-encoded strings
 /// for storage in the database.

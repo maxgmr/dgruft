@@ -1,4 +1,4 @@
-pub const GET_ACCOUNT: &str = "
+pub const SELECT_ACCOUNT: &str = "
     SELECT
         username,
         password_salt,
@@ -29,7 +29,37 @@ pub const DELETE_ACCOUNT: &str = "
         username = ?1
 ";
 
-pub const GET_CREDENTIAL: &str = "
+pub const UPDATE_ACCOUNT_PASSWORD_SALT: &str = "
+    UPDATE accounts
+    SET password_salt = ?1
+    WHERE username = ?2
+";
+
+pub const UPDATE_ACCOUNT_DBL_HASHED_PASSWORD_HASH: &str = "
+    UPDATE accounts
+    SET dbl_hashed_password_hash = ?1
+    WHERE username = ?2
+";
+
+pub const UPDATE_ACCOUNT_DBL_HASHED_PASSWORD_SALT: &str = "
+    UPDATE accounts
+    SET dbl_hashed_password_salt = ?1
+    WHERE username = ?2
+";
+
+pub const UPDATE_ACCOUNT_ENCRYPTED_KEY_CIPHERBYTES: &str = "
+    UPDATE accounts
+    SET encrypted_key_cipherbytes = ?1
+    WHERE username = ?2
+";
+
+pub const UPDATE_ACCOUNT_ENCRYPTED_KEY_NONCE: &str = "
+    UPDATE accounts
+    SET encrypted_key_nonce = ?1
+    WHERE username = ?2
+";
+
+pub const SELECT_CREDENTIAL: &str = "
     SELECT
         owner_username,
         encrypted_name_cipherbytes,
@@ -68,12 +98,60 @@ pub const DELETE_CREDENTIAL: &str = "
         AND encrypted_name_cipherbytes = ?2
 ";
 
-pub const GET_FILE_DATA: &str = "
+pub const UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_CIPHERBYTES: &str = "
+    UPDATE credentials
+    SET encrypted_username_cipherbytes = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE: &str = "
+    UPDATE credentials
+    SET encrypted_username_nonce = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_CIPHERBYTES: &str = "
+    UPDATE credentials
+    SET encrypted_password_cipherbytes = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_NONCE: &str = "
+    UPDATE credentials
+    SET encrypted_password_nonce = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const UPDATE_CREDENTIAL_ENCRYPTED_NOTES_CIPHERBYTES: &str = "
+    UPDATE credentials
+    SET encrypted_notes_cipherbytes = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const UPDATE_CREDENTIAL_ENCRYPTED_NOTES_NONCE: &str = "
+    UPDATE credentials
+    SET encrypted_notes_nonce = ?1
+    WHERE
+        owner_username = ?2
+        AND encrypted_name_cipherbytes = ?3
+";
+
+pub const SELECT_FILE_DATA: &str = "
     SELECT
         path,
         filename,
         owner_username,
-        content_nonce
+        contents_nonce
     FROM files_data
     WHERE
         path = ?1
@@ -84,7 +162,7 @@ pub const INSERT_FILE_DATA: &str = "
         path,
         filename,
         owner_username,
-        content_nonce
+        contents_nonce
     )
     VALUES (?1, ?2, ?3, ?4)
 ";
@@ -93,4 +171,10 @@ pub const DELETE_FILE_DATA: &str = "
     DELETE FROM files_data
     WHERE
         path = ?1
+";
+
+pub const UPDATE_FILE_DATA_CONTENTS_NONCE: &str = "
+    UPDATE files_data
+    SET contents_nonce = ?1
+    WHERE path = ?2
 ";
