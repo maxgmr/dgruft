@@ -10,9 +10,7 @@ mod filesystem;
 mod sql_schemas;
 mod sql_statements;
 
-use super::account::Account;
-use super::credential::Credential;
-use super::file_data::FileData;
+use super::{account::Account, credential::Credential, file_data::FileData};
 use database::{Database, Table};
 
 /// The [Vault] is reponsible for all saving, loading, and editing of `dgruft` data. It handles the
@@ -63,6 +61,8 @@ impl Vault {
     // {
     //     // Create account.
     //     let account = Account::new(username.as_ref(), password.as_ref())?;
+    //
+    //     // Start transaction.
     // }
 }
 
