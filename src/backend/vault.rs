@@ -13,10 +13,14 @@ mod sql_statements;
 use super::{
     account::{Account, UnlockedAccount},
     credential::Credential,
-    encryption::encrypted::{self, Aes256Key, Encrypted, TryFromEncrypted, TryIntoEncrypted},
+    encryption::encrypted::{
+        self, Aes256Key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+    },
     file_data::FileData,
+    hashing::hashed::{Hash, Salt},
 };
 use database::Database;
+use database_traits::{AccountUpdateField, CredentialUpdateField, FileDataUpdateField};
 use filesystem::{
     get_account_file_dir, get_file_path, new_account_file_dir, new_file, open_file,
     read_file_bytes, verify_writeable_dir,
@@ -112,6 +116,68 @@ impl Vault {
         let loaded_account = self.load_account(username.as_ref())?;
         // Unlock the account.
         loaded_account.unlock(password.as_ref())
+    }
+
+    /// Change the password of an [Account].
+    pub fn change_account_password<S>(
+        &mut self,
+        username: S,
+        old_password: S,
+        new_password: S,
+    ) -> eyre::Result<()>
+    where
+        S: AsRef<str>,
+    {
+        // Load & unlock the account.
+        let mut unlocked_account =
+            self.load_unlocked_account(username.as_ref(), old_password.as_ref())?;
+        // Change unlocked account's password.
+        unlocked_account.change_password(new_password.as_ref())?;
+
+        // Open a new database transaction.
+        let tx = self.database.open_transaction()?;
+        // Update the password salt.
+        let num_rows = Database::transaction_update::<Account, &str, Salt<64>, 1, 1>(
+            [username.as_ref()],
+            AccountUpdateField::PasswordSalt,
+            [*unlocked_account.hashed_password().salt()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Update the double-hashed password hash.
+        let num_rows = Database::transaction_update::<Account, &str, Hash<32>, 1, 1>(
+            [username.as_ref()],
+            AccountUpdateField::DblHashedPasswordHash,
+            [*unlocked_account.dbl_hashed_password().hash()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Update the double-hashed password salt.
+        let num_rows = Database::transaction_update::<Account, &str, Salt<64>, 1, 1>(
+            [username.as_ref()],
+            AccountUpdateField::DblHashedPasswordSalt,
+            [*unlocked_account.dbl_hashed_password().salt()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Update the encrypted key cipherbytes.
+        let num_rows = Database::transaction_update::<Account, &str, &[u8], 1, 1>(
+            [username.as_ref()],
+            AccountUpdateField::EncryptedKeyCipherbytes,
+            [unlocked_account.encrypted_key().cipherbytes()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Update the encrypted key nonce.
+        let num_rows = Database::transaction_update::<Account, &str, Aes256Nonce, 1, 1>(
+            [username.as_ref()],
+            AccountUpdateField::EncryptedKeyNonce,
+            [unlocked_account.encrypted_key().nonce()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Commit the database transaction.
+        Ok(tx.commit()?)
     }
 
     // CREDENTIAL FUNCTIONALITY
@@ -308,6 +374,16 @@ impl Vault {
     {
         self.database
             .select_owned_entries([owner_username.as_ref()])
+    }
+
+    // Helper function: Ensure that exactly one row was updated.
+    fn validate_one_row(num_rows: usize) -> eyre::Result<()> {
+        match num_rows {
+            1 => Ok(()),
+            num => Err(eyre!(
+                "Tried to update 1 row; {num} matches found. No changes to database were made."
+            )),
+        }
     }
 }
 
@@ -677,5 +753,46 @@ mod tests {
             vault.load_account_files_data("mr_awesome").unwrap().len(),
             2
         );
+    }
+
+    #[test]
+    fn change_password() {
+        let db_name = "change_password.db";
+        let fs_name = "change_password";
+        let db_path = db_path(db_name);
+        let fs_dir = fs_dir(fs_name);
+        refresh_test_db(db_name);
+        refresh_test_fs(fs_name);
+
+        let mut vault = Vault::connect(&db_path, &fs_dir).unwrap();
+
+        let username = "mr_test";
+        let password = "open sesame!";
+        let new_password = "mr. test is the best!";
+        vault.create_new_account(username, password).unwrap();
+        let key = vault
+            .load_unlocked_account(username, password)
+            .unwrap()
+            .key();
+
+        let filename = "f";
+        let contents = "blah blah blah. this is a test. 我要茶";
+        vault
+            .create_file(filename, username, contents, key)
+            .unwrap();
+        let (_, fcontents): (_, String) = vault.load_file(username, filename, key).unwrap();
+        assert_eq!(fcontents, contents);
+
+        vault
+            .change_account_password(username, password, new_password)
+            .unwrap();
+
+        let _ = vault.load_unlocked_account(username, password).unwrap_err();
+        let key = vault
+            .load_unlocked_account(username, new_password)
+            .unwrap()
+            .key();
+        let (_, fcontents): (_, String) = vault.load_file(username, filename, key).unwrap();
+        assert_eq!(fcontents, contents);
     }
 }
