@@ -2,7 +2,9 @@ use std::{array::IntoIter, iter::Map};
 
 use camino::Utf8Path;
 use color_eyre::eyre::{self, eyre};
-use rusqlite::{config::DbConfig, params_from_iter, Connection, OpenFlags, Transaction};
+use rusqlite::{
+    config::DbConfig, params_from_iter, Connection, OpenFlags, ParamsFromIter, Transaction,
+};
 
 use super::{database_traits::*, sql_schemas::*};
 
@@ -76,6 +78,27 @@ impl Database {
             )),
             Err(err) => Err(err),
         }
+    }
+
+    /// Select all entries with a given foreign key.
+    pub fn select_owned_entries<T, U, const N: usize>(
+        &self,
+        foreign_key_arr: [U; N],
+    ) -> eyre::Result<Vec<T>>
+    where
+        T: TryFromDatabase + OwnedByAccount,
+        U: IntoB64,
+    {
+        let mut statement = self.connection.prepare(T::sql_select_owned())?;
+        let params = Self::get_params_iter(foreign_key_arr);
+        let rows = statement.query_map(params_from_iter(params), |row| {
+            Ok(T::try_from_database(row))
+        })?;
+        let mut results = Vec::new();
+        for query_result in rows {
+            results.push(query_result??);
+        }
+        Ok(results)
     }
 
     /// Delete a specific entry based on the given primary key.
