@@ -127,6 +127,21 @@ pub struct UnlockedAccount {
     encrypted_key: Encrypted,
 }
 impl UnlockedAccount {
+    /// Change the `password` of this [UnlockedAccount].
+    ///
+    /// The encryption key itself remains unchanged.
+    pub fn change_password(&mut self, new_password: &str) -> eyre::Result<()> {
+        let new_hashed_password = new_password.into_hashed_rand_salt();
+        let new_encrypted_key = self.key.try_encrypt_with_key(*new_hashed_password.hash())?;
+        let new_dbl_hashed_password = new_hashed_password.hash().into_hashed_rand_salt();
+
+        self.hashed_password = new_hashed_password;
+        self.encrypted_key = new_encrypted_key;
+        self.dbl_hashed_password = new_dbl_hashed_password;
+
+        Ok(())
+    }
+
     /// Return the `username` of this [UnlockedAccount].
     pub fn username(&self) -> &str {
         &self.username
