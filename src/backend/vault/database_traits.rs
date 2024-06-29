@@ -69,7 +69,6 @@ impl HasSqlStatements for Account {
 
 /// All the fields of [Credential] entries that may be updated.
 pub enum CredentialUpdateField {
-    EncryptedUsernameCipherbytes,
     EncryptedUsernameNonce,
     EncryptedPasswordCipherbytes,
     EncryptedPasswordNonce,
@@ -93,9 +92,6 @@ impl HasSqlStatements for Credential {
 
     fn sql_update(field: Self::UpdateField) -> &'static str {
         match field {
-            CredentialUpdateField::EncryptedUsernameCipherbytes => {
-                UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_CIPHERBYTES
-            }
             CredentialUpdateField::EncryptedUsernameNonce => {
                 UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE
             }

@@ -114,14 +114,6 @@ pub const DELETE_CREDENTIAL: &str = "
         AND encrypted_name_cipherbytes = ?2
 ";
 
-pub const UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_CIPHERBYTES: &str = "
-    UPDATE credentials
-    SET encrypted_username_cipherbytes = ?1
-    WHERE
-        owner_username = ?2
-        AND encrypted_name_cipherbytes = ?3
-";
-
 pub const UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE: &str = "
     UPDATE credentials
     SET encrypted_username_nonce = ?1
