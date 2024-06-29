@@ -1,7 +1,7 @@
 //! Functionality related to saving, loading, and editing files.
 use std::{
     fs::{create_dir, metadata, File, OpenOptions},
-    io::Read,
+    io::{Read, Write},
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -47,6 +47,17 @@ where
     Ok(dir)
 }
 
+/// Get the path of a file from the account and file names.
+pub fn get_file_path<P, S>(fs_dir: P, username: S, filename: S) -> eyre::Result<Utf8PathBuf>
+where
+    P: AsRef<Utf8Path>,
+    S: AsRef<str>,
+{
+    let mut path = get_account_file_dir(fs_dir.as_ref(), username.as_ref())?;
+    path.push(filename.as_ref());
+    Ok(path)
+}
+
 /// Create an [Account] file directory.
 pub fn new_account_file_dir<P>(fs_dir: P, username: &str) -> eyre::Result<()>
 where
@@ -57,6 +68,17 @@ where
     dir.push(username);
     create_dir(dir)?;
     Ok(())
+}
+
+/// Create a new [File] containing the given contents.
+pub fn new_file<P, B>(path: P, contents: B) -> eyre::Result<()>
+where
+    P: AsRef<Utf8Path>,
+    B: Into<Vec<u8>>,
+{
+    let mut file = File::create_new(path.as_ref())?;
+    let bytes_vec: Vec<u8> = contents.into();
+    Ok(file.write_all(&bytes_vec)?)
 }
 
 /// Read a [File] as bytes.
