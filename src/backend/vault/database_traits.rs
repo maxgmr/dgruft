@@ -306,7 +306,15 @@ macro_rules! impl_into_b64_byte_vec {
         })*
     }
 }
-impl_into_b64_byte_vec!(Vec<u8>, &[u8], String, &str, Aes256Key, Aes256Nonce);
+impl_into_b64_byte_vec!(
+    Vec<u8>,
+    &[u8],
+    String,
+    &str,
+    [u8; 64],
+    Aes256Key,
+    Aes256Nonce
+);
 macro_rules! impl_into_b64_camino {
     ($($t:ty),+) => {
         $(impl IntoB64 for $t {
