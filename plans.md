@@ -5,6 +5,7 @@
 - Edit in default text editor
 - Pipe file/credentials list to stdout for usage with fzf, less, grep, etc.
 - "Vault sync" utility that allows user to fix any issues with filesystem/database coherency
+- Root account?
 
 # Possible Features
 
