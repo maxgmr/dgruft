@@ -51,7 +51,7 @@ pub fn data_dir() -> eyre::Result<Utf8PathBuf> {
     }
 }
 
-/// Get the directory of a particular `drguft` account's files.
+/// Get the directory of a particular `dgruft` account's files.
 pub fn account_dir<S>(username: S) -> eyre::Result<Utf8PathBuf>
 where
     S: AsRef<str>,
