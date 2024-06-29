@@ -177,6 +177,75 @@ impl Database {
         }
     }
 
+    /// Update a specific entry. Returns the number of changed rows.
+    pub fn update_entry<T, U, V, const N: usize, const M: usize>(
+        &self,
+        selector_arr: [U; N],
+        update_field: T::UpdateField,
+        new_values_arr: [V; M],
+    ) -> eyre::Result<usize>
+    where
+        T: HasSqlStatements,
+        U: IntoB64 + Clone,
+        V: IntoB64,
+    {
+        Self::connection_update::<T, U, V, N, M>(
+            selector_arr,
+            update_field,
+            new_values_arr,
+            &self.connection,
+        )
+    }
+
+    /// Update an entry using the given [Transaction]. Returns the number of changed rows.
+    pub fn transaction_update<T, U, V, const N: usize, const M: usize>(
+        selector_arr: [U; N],
+        update_field: T::UpdateField,
+        new_values_arr: [V; M],
+        tx: &Transaction,
+    ) -> eyre::Result<usize>
+    where
+        T: HasSqlStatements,
+        U: IntoB64 + Clone,
+        V: IntoB64,
+    {
+        Self::connection_update::<T, U, V, N, M>(selector_arr, update_field, new_values_arr, tx)
+    }
+
+    // Helper function— connection-agnostic update.
+    fn connection_update<T, U, V, const N: usize, const M: usize>(
+        selector_arr: [U; N],
+        update_field: T::UpdateField,
+        new_values_arr: [V; M],
+        conn: &Connection,
+    ) -> eyre::Result<usize>
+    where
+        T: HasSqlStatements,
+        U: IntoB64 + Clone,
+        V: IntoB64,
+    {
+        let mut statement = conn.prepare(T::sql_update(update_field))?;
+        // Parameters format: The updated fields followed by the primary key appended on to the end.
+        let mut params_vec = new_values_arr
+            .into_iter()
+            .map(|e| e.into_b64())
+            .collect::<Vec<String>>();
+        params_vec.append(
+            &mut selector_arr
+                .into_iter()
+                .map(|e| e.into_b64())
+                .collect::<Vec<String>>(),
+        );
+
+        let num_rows = statement.execute(params_from_iter(params_vec))?;
+
+        if num_rows == 0 {
+            Err(eyre!("The given params returned no rows to update.",))
+        } else {
+            Ok(num_rows)
+        }
+    }
+
     // Helper function to get SQLite params from an array.
     fn get_params_iter<U, const N: usize>(
         params_arr: [U; N],
@@ -202,7 +271,9 @@ mod tests {
         super::super::{
             account::Account,
             credential::Credential,
-            encryption::encrypted::{new_rand_key, Encrypted, TryFromEncrypted, TryIntoEncrypted},
+            encryption::encrypted::{
+                new_rand_key, Aes256Key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+            },
             file_data::FileData,
         },
         *,
@@ -411,7 +482,8 @@ mod tests {
             .is_some());
 
         db.delete_entry::<Account, &str, 1>([uname_1]).unwrap();
-        db.select_entry_err_none::<Account, &str, 1>([uname_1])
+        let _ = db
+            .select_entry_err_none::<Account, &str, 1>([uname_1])
             .unwrap_err();
         assert!(db
             .select_entry::<Account, &str, 1>([uname_1])
@@ -486,6 +558,93 @@ mod tests {
             ])
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn update() {
+        let db_path = "tests/update.db";
+        let db = refresh_test_db(db_path);
+
+        let dir = Utf8PathBuf::from("tests/");
+
+        let username = "abc";
+        let password = "123";
+        let account = Account::new(username, password).unwrap();
+        db.insert_entry(account).unwrap();
+
+        let f_filename = "f";
+        let mut f_path = dir.clone();
+        f_path.push(f_filename);
+        let f_contents = "this is my file.";
+        let (f_encrypted, _) = f_contents.try_encrypt_new_key().unwrap();
+        let f = FileData::new(
+            &f_path,
+            f_filename.to_owned(),
+            username.to_owned(),
+            f_encrypted.nonce(),
+        );
+        db.insert_entry(f).unwrap();
+
+        let f_contents = "this is my file, her name is f.";
+        let (f_encrypted, key) = f_contents.try_encrypt_new_key().unwrap();
+        db.update_entry::<FileData, &Utf8Path, Aes256Nonce, 1, 1>(
+            [&f_path],
+            FileDataUpdateField::ContentsNonce,
+            [f_encrypted.nonce()],
+        )
+        .unwrap();
+        let f: FileData = db.select_entry([&f_path]).unwrap().unwrap();
+        assert_eq!(f.contents_nonce(), f_encrypted.nonce());
+
+        let _ = db
+            .update_entry::<FileData, &str, &str, 1, 1>(
+                ["notarealpath"],
+                FileDataUpdateField::ContentsNonce,
+                [""],
+            )
+            .unwrap_err();
+        assert_eq!(f.contents_nonce(), f_encrypted.nonce());
+
+        let c_name = "c";
+        let c_username = "myusername";
+        let c_password = "mypassword";
+        let c_notes = "mynotes";
+        let c =
+            Credential::try_new(username, key, c_name, c_username, c_password, c_notes).unwrap();
+        let c_primary_key = [username.as_bytes(), c.encrypted_name().cipherbytes()];
+        db.insert_entry(c.clone()).unwrap();
+
+        let c_username = "mynewusername";
+        let ec_username = c_username.try_encrypt_with_key(key).unwrap();
+
+        assert_eq!(
+            db.update_entry::<Credential, &[u8], &[u8], 2, 1>(
+                c_primary_key,
+                CredentialUpdateField::EncryptedUsernameCipherbytes,
+                [ec_username.cipherbytes()],
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            db.update_entry::<Credential, &[u8], Aes256Nonce, 2, 1>(
+                c_primary_key,
+                CredentialUpdateField::EncryptedUsernameNonce,
+                [ec_username.nonce()],
+            )
+            .unwrap(),
+            1
+        );
+
+        let _ = db
+            .update_entry::<Credential, &[u8], &[u8], 2, 1>(
+                [username.as_bytes(), b"DNE"],
+                CredentialUpdateField::EncryptedUsernameCipherbytes,
+                [b"DNE"],
+            )
+            .unwrap_err();
+        let c: Credential = db.select_entry(c_primary_key).unwrap().unwrap();
+        assert_eq!(c.username::<String>(key).unwrap(), c_username);
     }
 
     #[test]
@@ -593,5 +752,64 @@ mod tests {
             .select_entry::<Account, &str, 1>([username2])
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn rollback_update_fail() {
+        let file_path = Utf8PathBuf::from("tests/update-rollback-test");
+        let _ = delete_a_file(&file_path);
+
+        let db_path = "tests/rollback_update_fail.db";
+        let mut db = refresh_test_db(db_path);
+
+        let username = "abc";
+        let password = "123";
+        let account = Account::new(username, password).unwrap();
+        db.insert_entry(account).unwrap();
+
+        let test_content1 = "this is my file.";
+        let test_content2 = "this is my file, and i like it very much.";
+
+        let (encrypted_contents1, _) = test_content1.try_encrypt_new_key().unwrap();
+        let (encrypted_contents2, _) = test_content2.try_encrypt_new_key().unwrap();
+
+        let file_data = FileData::new(
+            &file_path,
+            "update_rollback_test".to_owned(),
+            username.to_owned(),
+            encrypted_contents1.nonce(),
+        );
+        db.insert_entry(file_data).unwrap();
+
+        {
+            let tx = db.open_transaction().unwrap();
+            match Database::transaction_update::<FileData, &str, &str, 1, 1>(
+                ["tests/update-rollback-test-blehhh-fail"],
+                FileDataUpdateField::ContentsNonce,
+                [""],
+                &tx,
+            ) {
+                Ok(_) => panic!("should have failed. file path DNE."),
+                Err(_) => tx.rollback().unwrap(),
+            }
+
+            let tx = db.open_transaction().unwrap();
+            Database::transaction_update::<FileData, &Utf8Path, Aes256Nonce, 1, 1>(
+                [&file_path],
+                FileDataUpdateField::ContentsNonce,
+                [encrypted_contents2.nonce()],
+                &tx,
+            )
+            .unwrap();
+        }
+        // tx has gone out of scope; DB should not have been updated.
+        let loaded_file_data = db
+            .select_entry::<FileData, &Utf8Path, 1>([&file_path])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            loaded_file_data.contents_nonce(),
+            encrypted_contents1.nonce()
+        );
     }
 }
