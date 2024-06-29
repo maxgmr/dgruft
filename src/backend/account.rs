@@ -1,8 +1,10 @@
 //! Functionality for individual dgruft user accounts.
-use color_eyre::eyre;
+use color_eyre::eyre::{self, eyre};
 
 use super::{
-    encryption::encrypted::{new_rand_key, Aes256Key, Encrypted, TryIntoEncrypted},
+    encryption::encrypted::{
+        new_rand_key, Aes256Key, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+    },
     hashing::hashed::{Hashed, IntoHashed, Salt},
 };
 
@@ -67,6 +69,31 @@ impl Account {
         }
     }
 
+    /// Unlock this [Account] into an [UnlockedAccount] using its password.
+    pub fn unlock(&self, password: &str) -> eyre::Result<UnlockedAccount> {
+        let hashed_password = password.into_hashed_with_salt(self.password_salt);
+        let dbl_hashed_password = hashed_password
+            .hash()
+            .into_hashed_with_salt(*self.dbl_hashed_password.salt());
+
+        // Ensure passwords match
+        if dbl_hashed_password.hash() != self.dbl_hashed_password.hash() {
+            return Err(eyre!("Incorrect password."));
+        }
+
+        // Password OK. Get encryption key.
+        let key = Aes256Key::try_decrypt(&self.encrypted_key, *hashed_password.hash())?;
+
+        Ok(UnlockedAccount {
+            username: self.username.to_owned(),
+            password: password.to_owned(),
+            hashed_password,
+            dbl_hashed_password,
+            key,
+            encrypted_key: self.encrypted_key.clone(),
+        })
+    }
+
     /// Get the `username` of this [Account].
     pub fn username(&self) -> &str {
         &self.username
@@ -85,5 +112,71 @@ impl Account {
     /// Get the `encrypted_key` of this [Account].
     pub fn encrypted_key(&self) -> &Encrypted {
         &self.encrypted_key
+    }
+}
+
+/// An [Account] with all its fields accessible. This data should *never* be written to the disk or
+/// recorded in any other way!
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UnlockedAccount {
+    username: String,
+    password: String,
+    hashed_password: Hashed<32, 64>,
+    dbl_hashed_password: Hashed<32, 64>,
+    key: Aes256Key,
+    encrypted_key: Encrypted,
+}
+impl UnlockedAccount {
+    /// Return the `username` of this [UnlockedAccount].
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Return the `password` of this [UnlockedAccount].
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+
+    /// Return the `hashed_password` of this [UnlockedAccount].
+    pub fn hashed_password(&self) -> &Hashed<32, 64> {
+        &self.hashed_password
+    }
+
+    /// Return the `dbl_hashed_password` of this [UnlockedAccount].
+    pub fn dbl_hashed_password(&self) -> &Hashed<32, 64> {
+        &self.dbl_hashed_password
+    }
+
+    /// Return the `key` of this [UnlockedAccount].
+    pub fn key(&self) -> Aes256Key {
+        self.key
+    }
+
+    /// Return the `encrypted_key` of this [UnlockedAccount].
+    pub fn encrypted_key(&self) -> &Encrypted {
+        &self.encrypted_key
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn unlock() {
+        let username = "mr_test";
+        let password = "123";
+        let account = Account::new(username, password).unwrap();
+
+        let _ = account.unlock("1234").unwrap_err();
+        let unlocked = account.unlock("123").unwrap();
+        let unlocked_again = account.unlock("123").unwrap();
+
+        assert_eq!(unlocked.username(), username);
+        assert_eq!(unlocked.password(), password);
+
+        assert_eq!(unlocked, unlocked_again);
     }
 }
