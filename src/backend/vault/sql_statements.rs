@@ -76,6 +76,22 @@ pub const SELECT_CREDENTIAL: &str = "
         AND encrypted_name_cipherbytes = ?2
 ";
 
+pub const SELECT_ACCOUNT_CREDENTIALS: &str = "
+    SELECT
+        owner_username,
+        encrypted_name_cipherbytes,
+        encrypted_name_nonce,
+        encrypted_username_cipherbytes,
+        encrypted_username_nonce,
+        encrypted_password_cipherbytes,
+        encrypted_password_nonce,
+        encrypted_notes_cipherbytes,
+        encrypted_notes_nonce
+    FROM credentials
+    WHERE
+        owner_username = ?1
+";
+
 pub const INSERT_CREDENTIAL: &str = "
     INSERT INTO credentials (
         owner_username,
@@ -155,6 +171,17 @@ pub const SELECT_FILE_DATA: &str = "
     FROM files_data
     WHERE
         path = ?1
+";
+
+pub const SELECT_ACCOUNT_FILES_DATA: &str = "
+    SELECT
+        path,
+        filename,
+        owner_username,
+        contents_nonce
+    FROM files_data
+    WHERE
+        owner_username = ?1
 ";
 
 pub const INSERT_FILE_DATA: &str = "
