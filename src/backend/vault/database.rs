@@ -60,6 +60,24 @@ impl Database {
         }
     }
 
+    /// Like [Database::select_entry], but return [Err] if no entries were found.
+    pub fn select_entry_err_none<T, U, const N: usize>(
+        &self,
+        primary_key_arr: [U; N],
+    ) -> eyre::Result<T>
+    where
+        T: TryFromDatabase + HasSqlStatements,
+        U: IntoB64,
+    {
+        match self.select_entry(primary_key_arr) {
+            Ok(Some(entry)) => Ok(entry),
+            Ok(None) => Err(eyre!(
+                "No entries in database found matching the given primary key."
+            )),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Delete a specific entry based on the given primary key.
     pub fn delete_entry<T, U, const N: usize>(&self, primary_key_arr: [U; N]) -> eyre::Result<()>
     where
@@ -370,6 +388,8 @@ mod tests {
             .is_some());
 
         db.delete_entry::<Account, &str, 1>([uname_1]).unwrap();
+        db.select_entry_err_none::<Account, &str, 1>([uname_1])
+            .unwrap_err();
         assert!(db
             .select_entry::<Account, &str, 1>([uname_1])
             .unwrap()
