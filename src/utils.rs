@@ -57,6 +57,7 @@ where
     S: AsRef<str>,
 {
     let mut data_dir = data_dir()?;
+    data_dir.push("accounts");
     data_dir.push(username.as_ref());
     Ok(data_dir)
 }
