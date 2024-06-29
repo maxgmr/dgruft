@@ -1,5 +1,6 @@
 # Planned Features
 
+- Input limitations (i.e., usernames/passwords can't be too long)
 - Change password
 - Edit in default text editor
 - Pipe file/credentials list to stdout for usage with fzf, less, grep, etc.
