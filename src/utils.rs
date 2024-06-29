@@ -51,6 +51,16 @@ pub fn data_dir() -> eyre::Result<Utf8PathBuf> {
     }
 }
 
+/// Get the directory of a particular `drguft` account's files.
+pub fn account_dir<S>(username: S) -> eyre::Result<Utf8PathBuf>
+where
+    S: AsRef<str>,
+{
+    let mut data_dir = data_dir()?;
+    data_dir.push(username.as_ref());
+    Ok(data_dir)
+}
+
 /// Get the directory where `dgruft` configuration data is stored.
 pub fn config_dir() -> eyre::Result<Utf8PathBuf> {
     if let Some(utf8_path_buf) = data_dir_env_var() {
