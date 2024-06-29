@@ -2,9 +2,7 @@ use std::{array::IntoIter, iter::Map};
 
 use camino::Utf8Path;
 use color_eyre::eyre::{self, eyre};
-use rusqlite::{
-    config::DbConfig, params_from_iter, Connection, OpenFlags, ParamsFromIter, Transaction,
-};
+use rusqlite::{config::DbConfig, params_from_iter, Connection, OpenFlags, Transaction};
 
 use super::{database_traits::*, sql_schemas::*};
 
@@ -272,7 +270,7 @@ mod tests {
             account::Account,
             credential::Credential,
             encryption::encrypted::{
-                new_rand_key, Aes256Key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+                new_rand_key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
             },
             file_data::FileData,
         },
