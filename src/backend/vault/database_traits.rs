@@ -271,12 +271,31 @@ fn hashed_from_db<const H: usize, const S: usize>(
     Ok(Hashed::from_fields(hash, salt))
 }
 
+/// Implementors of this trait have entries that can be sorted and selected by an owning [Account]
+/// username.
+pub trait OwnedByAccount {
+    // Denotes the SQLite statement for selecting all entries owned by the given account username.
+    fn sql_select_owned() -> &'static str;
+}
+
+// Implementations
+impl OwnedByAccount for Credential {
+    fn sql_select_owned() -> &'static str {
+        SELECT_ACCOUNT_CREDENTIALS
+    }
+}
+impl OwnedByAccount for FileData {
+    fn sql_select_owned() -> &'static str {
+        SELECT_ACCOUNT_FILES_DATA
+    }
+}
+
 /// Implementors of this trait can be converted to a base-64-encoded String.
 pub trait IntoB64 {
     fn into_b64(self) -> String;
 }
 
-// Implementations.
+// Implementations
 macro_rules! impl_into_b64_byte_vec {
     ($($t:ty),+) => {
         $(impl IntoB64 for $t {
