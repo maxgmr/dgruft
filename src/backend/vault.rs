@@ -1,5 +1,5 @@
 //! All saving, loading, and editing of `dgruft` data is handled through here.
-use std::fs::remove_dir_all;
+use std::fs;
 
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
@@ -13,11 +13,14 @@ mod sql_statements;
 use super::{
     account::{Account, UnlockedAccount},
     credential::Credential,
-    encryption::encrypted::{Aes256Key, TryFromEncrypted},
+    encryption::encrypted::{self, Aes256Key, Encrypted, TryFromEncrypted, TryIntoEncrypted},
     file_data::FileData,
 };
 use database::Database;
-use filesystem::{get_account_file_dir, new_account_file_dir, verify_writeable_dir};
+use filesystem::{
+    get_account_file_dir, get_file_path, new_account_file_dir, new_file, open_file,
+    read_file_bytes, verify_writeable_dir,
+};
 
 /// The [Vault] is reponsible for all saving, loading, and editing of `dgruft` data. It handles the
 /// [Database] and the filesystem together to ensure that the two remain consistent when interacted
@@ -77,7 +80,7 @@ impl Vault {
         // credentials.
         Database::transaction_delete::<Account, &str, 1>([username.as_ref()], &tx)?;
         // Attempt to delete the account's files directory.
-        remove_dir_all(account_dir)?;
+        fs::remove_dir_all(account_dir)?;
         // Commit the transaction to the database.
         Ok(tx.commit()?)
     }
@@ -213,12 +216,99 @@ impl Vault {
         S: AsRef<str>,
     {
         self.database
-            .select_owned_entries::<Credential, &str, 1>([owner_username.as_ref()])
+            .select_owned_entries([owner_username.as_ref()])
     }
 
     // FILE FUNCTIONALITY
 
-    // /// Create a new file, along with [FileData], & add it to the [Database].
+    /// Create a new file, along with its corresponding [FileData], & add it to the [Database].
+    pub fn create_file<S, E>(
+        &mut self,
+        filename: S,
+        owner_username: S,
+        contents: E,
+        key: Aes256Key,
+    ) -> eyre::Result<()>
+    where
+        S: AsRef<str>,
+        E: TryIntoEncrypted,
+    {
+        // Get the future path of this file.
+        let file_path = get_file_path(&self.filesystem_directory, &owner_username, &filename)?;
+
+        // Encrypt the contents of the new file.
+        let encrypted_contents = contents.try_encrypt_with_key(key)?;
+
+        // Create the file data.
+        let file_data = FileData::new(
+            &file_path,
+            filename.as_ref().to_owned(),
+            owner_username.as_ref().to_owned(),
+            encrypted_contents.nonce().to_owned(),
+        );
+
+        // Open a new database transaction.
+        let tx = self.database.open_transaction()?;
+        // Attempt to add the file data to the database.
+        Database::transaction_insert(file_data, &tx)?;
+        // Attempt to create a new file with the encrypted contents.
+        new_file(file_path, encrypted_contents.cipherbytes())?;
+        // Commit the transaction.
+        Ok(tx.commit()?)
+    }
+
+    /// Delete a file and its corresponding [FileData] from the [Database], rolling back the
+    /// changes on a failure.
+    pub fn delete_file<S>(&mut self, username: S, filename: S) -> eyre::Result<()>
+    where
+        S: AsRef<str>,
+    {
+        // Get the file path.
+        let file_path = get_file_path(&self.filesystem_directory, &username, &filename)?;
+        // Open a new database transaction.
+        let tx = self.database.open_transaction()?;
+        // Delete the file data entry.
+        Database::transaction_delete::<FileData, &Utf8Path, 1>([&file_path], &tx)?;
+        // Delete the file.
+        fs::remove_file(&file_path)?;
+        // Commit the database transaction.
+        Ok(tx.commit()?)
+    }
+
+    /// Load the file and [FileData] with the given `owner_username` & `filename`.
+    pub fn load_file<S, E>(
+        &self,
+        username: S,
+        filename: S,
+        key: Aes256Key,
+    ) -> eyre::Result<(FileData, E)>
+    where
+        S: AsRef<str>,
+        E: TryFromEncrypted,
+    {
+        // Get the file path.
+        let file_path = get_file_path(&self.filesystem_directory, &username, &filename)?;
+        // Load the file data.
+        let file_data: FileData = self.database.select_entry_err_none([&file_path])?;
+        // Load the encrypted file contents.
+        let file = open_file(&file_path)?;
+        let encrypted_file_bytes = read_file_bytes(&file)?;
+        let encrypted_file =
+            Encrypted::from_fields(encrypted_file_bytes, file_data.contents_nonce());
+        // Decrypt and load the file contents.
+        let decrypted_contents: E = E::try_decrypt(&encrypted_file, key)?;
+
+        Ok((file_data, decrypted_contents))
+    }
+
+    /// Load all [FileData] belonging to the given `owner_username`.
+    pub fn load_account_files_data<S>(&self, owner_username: S) -> eyre::Result<Vec<FileData>>
+    where
+        S: AsRef<str>,
+    {
+        self.database
+            .select_owned_entries([owner_username.as_ref()])
+    }
 }
 
 #[cfg(test)]
@@ -461,5 +551,131 @@ mod tests {
         vault
             .load_credential(username1, "my bank account", unlocked1.key())
             .unwrap();
+    }
+
+    #[test]
+    fn create_del_files() {
+        let db_name = "create_del_files.db";
+        let fs_name = "create_del_files";
+        let db_path = db_path(db_name);
+        let fs_dir = fs_dir(fs_name);
+        refresh_test_db(db_name);
+        refresh_test_fs(fs_name);
+
+        let mut vault = Vault::connect(&db_path, &fs_dir).unwrap();
+
+        let username1 = "mr_test";
+        let password1 = "open sesame!";
+        vault.create_new_account(username1, password1).unwrap();
+        let unlocked1 = vault.load_unlocked_account(username1, password1).unwrap();
+        assert!(vault.load_account_files_data(username1).unwrap().is_empty());
+
+        let username2 = "mr_awesome";
+        let password2 = "let me in!!!!!!";
+        vault.create_new_account(username2, password2).unwrap();
+        let unlocked2 = vault.load_unlocked_account(username2, password2).unwrap();
+        assert!(vault.load_account_files_data(username2).unwrap().is_empty());
+
+        // Add some files.
+        vault
+            .create_file(
+                "shopping list",
+                "mr_test",
+                "eggs\nmilk\nbread",
+                unlocked1.key(),
+            )
+            .unwrap();
+        vault
+            .create_file(
+                "my secret",
+                "mr_test",
+                "Sometimes even I, the great Mr. Test, get tired of tests sometimes...",
+                unlocked1.key(),
+            )
+            .unwrap();
+        let _ = vault
+            .create_file("my secret", "mr_test", "No dupes allowed!", unlocked1.key())
+            .unwrap_err();
+
+        vault.create_file(
+            "my secret", 
+            "mr_awesome", 
+            "i wish i wasn't the second account ALL the time...\n\nsometimes a guy just wants to be \"number one\", yennow?",
+            unlocked2.key()
+            ).unwrap();
+        vault
+            .create_file("中文", "mr_awesome", "加拿大很美丽", unlocked2.key())
+            .unwrap();
+        vault
+            .create_file("blah blah blah", "mr_awesome", "", unlocked2.key())
+            .unwrap();
+
+        // Open some files.
+        assert_eq!(vault.load_account_files_data("mr_test").unwrap().len(), 2);
+        assert_eq!(
+            vault.load_account_files_data("mr_awesome").unwrap().len(),
+            3
+        );
+
+        let (test_shop_fd, test_shop_contents): (FileData, String) = vault
+            .load_file("mr_test", "shopping list", unlocked1.key())
+            .unwrap();
+        assert_eq!(test_shop_fd.filename(), "shopping list");
+        assert_eq!(test_shop_contents, "eggs\nmilk\nbread");
+
+        let (test_secret_fd, test_secret_contents): (FileData, String) = vault
+            .load_file("mr_test", "my secret", unlocked1.key())
+            .unwrap();
+        assert_eq!(test_secret_fd.filename(), "my secret");
+        assert_eq!(
+            test_secret_contents,
+            "Sometimes even I, the great Mr. Test, get tired of tests sometimes..."
+        );
+
+        let (awesome_secret_fd, awesome_secret_contents): (FileData, String) = vault
+            .load_file("mr_awesome", "my secret", unlocked2.key())
+            .unwrap();
+        assert_eq!(awesome_secret_fd.filename(), "my secret");
+        assert_eq!(
+            awesome_secret_contents,
+            "i wish i wasn't the second account ALL the time...\n\nsometimes a guy just wants to be \"number one\", yennow?"
+        );
+
+        let (awesome_zhongwen_fd, awesome_zhongwen_contents): (FileData, String) = vault
+            .load_file("mr_awesome", "中文", unlocked2.key())
+            .unwrap();
+        assert_eq!(awesome_zhongwen_fd.filename(), "中文");
+        assert_eq!(awesome_zhongwen_contents, "加拿大很美丽");
+
+        // Ensure that the file will not be deleted on database error.
+        // Force delete database entry improperly to cause error.
+        let zhongwen_path =
+            get_file_path(&vault.filesystem_directory, "mr_awesome", "中文").unwrap();
+        vault
+            .database
+            .delete_entry::<FileData, &Utf8Path, 1>([&zhongwen_path])
+            .unwrap();
+        let _ = vault.delete_file("mr_awesome", "中文").unwrap_err();
+        open_file(zhongwen_path).unwrap();
+        assert_eq!(
+            vault.load_account_files_data("mr_awesome").unwrap().len(),
+            2
+        );
+
+        // Ensure that database entry will not be deleted on file error.
+        // Force delete file to ensure file error.
+        let blah_path =
+            get_file_path(&vault.filesystem_directory, "mr_awesome", "blah blah blah").unwrap();
+        fs::remove_file(&blah_path).unwrap();
+        let _ = vault
+            .delete_file("mr_awesome", "blah blah blah")
+            .unwrap_err();
+        let _ = vault
+            .load_file::<&str, Vec<u8>>("mr_awesome", "blah blah blah", unlocked2.key())
+            .unwrap_err();
+        assert_eq!(
+            vault.load_account_files_data("mr_awesome").unwrap().len(),
+            2
+        );
     }
 }
