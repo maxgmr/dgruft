@@ -1,17 +1,10 @@
 use std::{array::IntoIter, iter::Map};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use color_eyre::eyre::{self, eyre};
 use rusqlite::{config::DbConfig, params_from_iter, Connection, OpenFlags, Transaction};
 
-use super::{database_traits::*, sql_schemas::*, sql_statements::*};
-
-/// All the tables stored in the [Database]. Used to determine [Database] function behaviour.
-pub enum Table {
-    Accounts,
-    Credentials,
-    FilesData,
-}
+use super::{database_traits::*, sql_schemas::*};
 
 #[derive(Debug)]
 pub struct Database {
@@ -38,19 +31,9 @@ impl Database {
         Ok(Self { connection })
     }
 
-    /// Create a new database [Transaction].
-    pub fn new_transaction(&mut self) -> eyre::Result<Transaction> {
+    /// Open a new database [Transaction].
+    pub fn open_transaction(&mut self) -> eyre::Result<Transaction> {
         Ok(self.connection.transaction()?)
-    }
-
-    /// Rollback the [Transaction].
-    pub fn rollback_transaction(tx: Transaction) -> eyre::Result<()> {
-        Ok(tx.rollback()?)
-    }
-
-    /// Commit the [Transaction].
-    pub fn commit_transaction(tx: Transaction) -> eyre::Result<()> {
-        Ok(tx.commit()?)
     }
 
     /// Retreive a specific entry based on the given primary key.
@@ -77,70 +60,43 @@ impl Database {
         }
     }
 
-    // /// Delete a database entry, then execute a given function.
-    // ///
-    // /// The function in question is typically a modification to a filesystem or something else that
-    // /// should be consistent with the database.
-    // ///
-    // /// Should any errors be encountered whilst executing the function or modifying the database
-    // /// itself, all changes made to the database will not be committed.
-    // pub fn transaction_delete_old<T, U, const N: usize>(
-    //     &mut self,
-    //     params: [U; N],
-    //     fn_result: eyre::Result<()>,
-    // ) -> eyre::Result<()>
-    // where
-    //     T: HasSqlStatements,
-    //     U: IntoB64,
-    // {
-    //     let savepoint = self.connection.savepoint()?;
-    //
-    //     Self::delete_entry_at_conn::<T, U, N>(&savepoint, params)?;
-    //     // If this function fails, then the database will not be modified.
-    //     fn_result?;
-    //
-    //     savepoint.commit()?;
-    //     Ok(())
-    // }
-
     /// Delete a specific entry based on the given primary key.
     pub fn delete_entry<T, U, const N: usize>(&self, primary_key_arr: [U; N]) -> eyre::Result<()>
     where
         T: HasSqlStatements,
         U: IntoB64,
     {
-        let mut statement = self.connection.prepare(T::sql_delete())?;
-        let params = Self::get_params_iter(primary_key_arr);
-
-        let num_rows = statement.execute(params_from_iter(params))?;
-        if num_rows == 0 {
-            Err(eyre!("Params returned no rows to delete."))
-        } else {
-            Ok(())
-        }
+        Self::connection_delete::<T, U, N>(primary_key_arr, &self.connection)
     }
 
     /// Delete a specific entry using the current [Transaction].
     pub fn transaction_delete<T, U, const N: usize>(
-        &mut self,
         primary_key_arr: [U; N],
-        tx: Transaction,
+        tx: &Transaction,
     ) -> eyre::Result<()>
     where
         T: HasSqlStatements,
         U: IntoB64,
     {
-        let num_rows: usize;
+        Self::connection_delete::<T, U, N>(primary_key_arr, tx)
+    }
 
-        {
-            let mut statement = tx.prepare(T::sql_delete())?;
-            let params = Self::get_params_iter(primary_key_arr);
+    // Helper function— connection-agnostic delete.
+    fn connection_delete<T, U, const N: usize>(
+        primary_key_arr: [U; N],
+        conn: &Connection,
+    ) -> eyre::Result<()>
+    where
+        T: HasSqlStatements,
+        U: IntoB64,
+    {
+        let mut statement = conn.prepare(T::sql_delete())?;
+        let params = Self::get_params_iter(primary_key_arr);
 
-            num_rows = statement.execute(params_from_iter(params))?;
-        }
+        let num_rows = statement.execute(params_from_iter(params))?;
 
         if num_rows == 0 {
-            Err(eyre!("Params returned no rows to delete."))
+            Err(eyre!("The given params returned no rows to delete.",))
         } else {
             Ok(())
         }
@@ -152,9 +108,32 @@ impl Database {
         T: IntoDatabase + HasSqlStatements,
         T::FixedSizeStringArray: rusqlite::Params,
     {
-        self.connection
-            .execute(T::sql_insert(), entry.into_database())?;
-        Ok(())
+        Self::connection_insert::<T>(entry, &self.connection)
+    }
+
+    /// Insert a specific entry using the current [Transaction].
+    pub fn transaction_insert<T>(entry: T, tx: &Transaction) -> eyre::Result<()>
+    where
+        T: IntoDatabase + HasSqlStatements,
+        T::FixedSizeStringArray: rusqlite::Params,
+    {
+        Self::connection_insert::<T>(entry, tx)
+    }
+
+    // Helper function— connection-agnostic delete.
+    fn connection_insert<T>(entry: T, conn: &Connection) -> eyre::Result<()>
+    where
+        T: IntoDatabase + HasSqlStatements,
+        T::FixedSizeStringArray: rusqlite::Params,
+    {
+        let num_rows = conn.execute(T::sql_insert(), entry.into_database())?;
+        if num_rows == 0 {
+            Err(eyre!("Failed to insert row."))
+        } else if num_rows == 1 {
+            Ok(())
+        } else {
+            Err(eyre!("Somehow, more than one element was inserted..."))
+        }
     }
 
     // Helper function to get SQLite params from an array.
@@ -175,6 +154,7 @@ mod tests {
         io::Write,
     };
 
+    use camino::{Utf8Path, Utf8PathBuf};
     use pretty_assertions::assert_eq;
 
     use super::{
@@ -481,40 +461,50 @@ mod tests {
         make_a_file(&file_path, b"blah blah blah").unwrap();
         fs::metadata(&file_path).unwrap();
 
-        // match db.transaction_delete::<Credential, &str, 1>([
-        //     "wrong primary key field count! please preserve my file!",
-        // ]) {
-        //     Ok(_) => {}
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
-        // match delete_a_file(&file_path) {
-        //     Ok(_) => db.commit_transaction().unwrap(),
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
-
+        let tx = db.open_transaction().unwrap();
+        match Database::transaction_delete::<Credential, &str, 1>(
+            ["wrong primary key field count! please preserve my file!"],
+            &tx,
+        ) {
+            Ok(_) => match delete_a_file(&file_path) {
+                Ok(_) => tx.commit().unwrap(),
+                Err(_) => panic!("Should not have succeeded."),
+            },
+            Err(_) => tx.rollback().unwrap(),
+        };
         fs::metadata(&file_path).unwrap();
 
-        // match db.transaction_delete::<Account, &str, 1>([
-        //     "misspelled username! i hope my file doesn't actually get deleted!",
-        // ]) {
-        //     Ok(_) => {}
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
-        // match delete_a_file(&file_path) {
-        //     Ok(_) => db.commit_transaction().unwrap(),
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
+        let tx = db.open_transaction().unwrap();
+        match Database::transaction_delete::<Account, &str, 1>(
+            ["misspelled username! i hope my file doesn't actually get deleted!"],
+            &tx,
+        ) {
+            Ok(_) => match delete_a_file(&file_path) {
+                Ok(_) => tx.commit().unwrap(),
+                Err(_) => panic!("Should not have succeeded."),
+            },
 
+            Err(_) => tx.rollback().unwrap(),
+        };
         fs::metadata(&file_path).unwrap();
 
-        // match db.transaction_delete::<Account, &str, 1>(["abc"]) {
-        //     Ok(_) => {}
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
-        // match delete_a_file(&file_path) {
-        //     Ok(_) => db.commit_transaction().unwrap(),
-        //     Err(_) => db.rollback_transaction().unwrap(),
-        // };
+        let tx = db.open_transaction().unwrap();
+        match Database::transaction_delete::<Account, &str, 1>(["abc"], &tx) {
+            Ok(_) => match delete_a_file(&Utf8PathBuf::from("examples")) {
+                Ok(_) => tx.commit().unwrap(),
+                Err(_) => tx.rollback().unwrap(),
+            },
+            Err(_) => panic!("Should not have failed."),
+        }
+
+        let tx = db.open_transaction().unwrap();
+        match Database::transaction_delete::<Account, &str, 1>(["abc"], &tx) {
+            Ok(_) => match delete_a_file(&Utf8PathBuf::from(&file_path)) {
+                Ok(_) => tx.commit().unwrap(),
+                Err(_) => tx.rollback().unwrap(),
+            },
+            Err(_) => panic!("Should not have failed."),
+        }
 
         fs::metadata(&file_path).unwrap_err();
     }
@@ -531,31 +521,34 @@ mod tests {
         let password = "123";
         let account = Account::new(username, password).unwrap();
 
-        // db.transaction_insert(account, make_a_file(&file_path, b"blah blah blah"))
-        //     .unwrap();
-        // fs::metadata(&file_path).unwrap();
+        let tx = db.open_transaction().unwrap();
+        Database::transaction_insert(account, &tx).unwrap();
+        make_a_file(&file_path, b"blah blah blah").unwrap();
+        tx.commit().unwrap();
 
-        // let _ = db
-        //     .transaction_delete::<Credential, &str, 1>(
-        //         ["wrong primary key field count! please preserve my file!"],
-        //         delete_a_file(&file_path),
-        //     )
-        //     .unwrap_err();
-
+        db.select_entry::<Account, &str, 1>([username]).unwrap();
         fs::metadata(&file_path).unwrap();
 
-        // let _ = db
-        //     .transaction_delete::<Account, &str, 1>(
-        //         ["misspelled username! i hope my file doesn't actually get deleted!"],
-        //         delete_a_file(&file_path),
-        //     )
-        //     .unwrap_err();
+        let username2 = "def";
+        let password2 = "456";
+        let account2 = Account::new(username2, password2).unwrap();
 
-        fs::metadata(&file_path).unwrap();
+        assert!(db
+            .select_entry::<Account, &str, 1>([username2])
+            .unwrap()
+            .is_none());
 
-        // db.transaction_delete::<Account, &str, 1>(["abc"], delete_a_file(&file_path))
-        //     .unwrap();
+        let tx = db.open_transaction().unwrap();
+        Database::transaction_insert(account2, &tx).unwrap();
+        match make_a_file(&file_path, b"should fail!") {
+            Ok(_) => tx.commit().unwrap(),
+            Err(_) => tx.rollback().unwrap(),
+        };
 
-        fs::metadata(&file_path).unwrap_err();
+        db.select_entry::<Account, &str, 1>([username]).unwrap();
+        assert!(db
+            .select_entry::<Account, &str, 1>([username2])
+            .unwrap()
+            .is_none());
     }
 }
