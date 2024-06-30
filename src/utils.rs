@@ -1,9 +1,15 @@
 //! General utilities used by `dgruft`.
-use std::env;
+use std::{
+    env,
+    fs::{self, File},
+};
 
 use camino::Utf8PathBuf;
 use color_eyre::eyre::{self, eyre};
 use directories::ProjectDirs;
+
+/// The name of the `dgruft` SQLite database.
+const DB_NAME: &str = "dgruft.db";
 
 /// String displaying the package version, git info, and build date of `dgruft`.
 const VERSION_MESSAGE: &str = concat!(
@@ -31,6 +37,33 @@ Config Directory: {}",
     )
 }
 
+/// Set up `dgruft` on first-time startup.
+pub fn setup() -> eyre::Result<()> {
+    // Create the directory where `dgruft` program data is stored.
+    if fs::metadata(data_dir()?).is_err() {
+        fs::create_dir_all(data_dir()?)?;
+    }
+
+    // Create the directory where `dgruft` configuration data is stored.
+    if fs::metadata(config_dir()?).is_err() {
+        fs::create_dir_all(config_dir()?)?;
+    }
+
+    // Create the `dgruft` SQLite database file.
+    if fs::metadata(db_path()?).is_err() {
+        File::create_new(db_path()?)?;
+    }
+
+    Ok(())
+}
+
+/// Get the path to the `dgruft` database.
+pub fn db_path() -> eyre::Result<Utf8PathBuf> {
+    let mut db_path = data_dir()?;
+    db_path.push(DB_NAME);
+    Ok(db_path)
+}
+
 /// Get the directory where `dgruft` program data is stored.
 pub fn data_dir() -> eyre::Result<Utf8PathBuf> {
     if let Some(utf8_path_buf) = data_dir_env_var() {
@@ -49,17 +82,6 @@ pub fn data_dir() -> eyre::Result<Utf8PathBuf> {
         // Last priority: .config folder relative to CWD
         Ok(Utf8PathBuf::from(".").join(".config"))
     }
-}
-
-/// Get the directory of a particular `dgruft` account's files.
-pub fn account_dir<S>(username: S) -> eyre::Result<Utf8PathBuf>
-where
-    S: AsRef<str>,
-{
-    let mut data_dir = data_dir()?;
-    data_dir.push("accounts");
-    data_dir.push(username.as_ref());
-    Ok(data_dir)
 }
 
 /// Get the directory where `dgruft` configuration data is stored.
