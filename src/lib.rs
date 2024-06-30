@@ -5,7 +5,10 @@
 #![warn(missing_docs)]
 
 mod backend;
-mod cli;
+pub mod cli;
 #[cfg(feature = "tui")]
 mod tui;
-mod utils;
+pub mod utils;
+
+// Re-exports
+pub use cli::arg_parser::Cli;
