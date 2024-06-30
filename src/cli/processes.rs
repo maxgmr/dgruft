@@ -4,10 +4,7 @@ use std::io::{self, Write};
 use color_eyre::eyre::{self, eyre};
 
 use crate::{
-    backend::{
-        account::{Account, UnlockedAccount},
-        vault::Vault,
-    },
+    backend::{Account, Credential, FileData, UnlockedAccount, Vault},
     utils::{data_dir, db_path},
 };
 
@@ -39,7 +36,8 @@ pub fn list_accounts() -> eyre::Result<()> {
     let vault = vault_connect()?;
 
     // Load all accounts.
-    let accounts = vault.load_all::<Account>()?;
+    let mut accounts = vault.load_all::<Account>()?;
+    accounts.sort_unstable();
 
     // Create username list output.
     let username_string = accounts
@@ -69,7 +67,7 @@ pub fn change_password(username: String) -> eyre::Result<()> {
     }
 
     // Update account password.
-    vault.change_account_password(username, unlocked.password().to_owned(), new_password)
+    vault.change_account_password(username, unlocked.password(), new_password)
 }
 
 /// Delete an existing account along with all its files and passwords.
@@ -108,7 +106,26 @@ pub fn delete_account(username: String, force: bool) -> eyre::Result<()> {
 
 /// Create a new credential.
 pub fn new_credential(username: String, credentialname: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Prompt for credential name.
+    let credential_username = cli_prompt(format!("{} username: ", credentialname))?;
+    let credential_password = cli_prompt(format!("{} password: ", credentialname))?;
+    let credential_notes = cli_prompt(format!("{} notes: ", credentialname))?;
+
+    // Add credential to vault.
+    vault.create_credential(
+        unlocked.username(),
+        unlocked.key(),
+        credentialname,
+        credential_username,
+        credential_password,
+        credential_notes,
+    )?;
+
     Ok(())
 }
 
@@ -120,7 +137,28 @@ pub fn open_credential(username: String, credentialname: String) -> eyre::Result
 
 /// List all credentials owned by the given account.
 pub fn list_credentials(username: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Load all credentials.
+    let credentials = vault.load_all::<Credential>()?;
+    // Convert to credential names.
+    let mut credential_names = credentials
+        .iter()
+        .map(|cred| cred.name::<String>(unlocked.key()).unwrap_or_default())
+        .collect::<Vec<String>>();
+
+    credential_names.sort_unstable();
+
+    let credential_names_string = credential_names
+        .iter()
+        .fold(String::new(), |acc, next| acc + &next + "\n");
+
+    // Print credential names.
+    println!("{}", credential_names_string);
+
     Ok(())
 }
 
@@ -181,12 +219,18 @@ fn prompt_password(username: &str) -> eyre::Result<String> {
     ))?)
 }
 
-// CLI confirmation message.
-fn cli_confirm(message: String, default: bool) -> eyre::Result<bool> {
+// General CLI prompt.
+fn cli_prompt(message: String) -> eyre::Result<String> {
     print!("{}", message);
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
+    Ok(input)
+}
+
+// CLI confirmation message.
+fn cli_confirm(message: String, default: bool) -> eyre::Result<bool> {
+    let input = cli_prompt(message)?;
     if default {
         match input.to_lowercase().chars().next() {
             Some('n') => Ok(true),
