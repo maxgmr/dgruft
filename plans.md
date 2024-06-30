@@ -6,6 +6,7 @@
 - Pipe file/credentials list to stdout for usage with fzf, less, grep, etc.
 - "Vault sync" utility that allows user to fix any issues with filesystem/database coherency
 - Root account?
+- Add shell completion through `clap_complete` crate
 
 # Possible Features
 
