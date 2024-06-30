@@ -56,14 +56,20 @@ pub fn list_accounts() -> eyre::Result<()> {
 pub fn change_password(username: String) -> eyre::Result<()> {
     // Connect to the vault.
     let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
 
     // Confirm new password.
     let new_password =
         rpassword::prompt_password(format!("New password for account {}: ", username))?;
     let confirm_new_password =
         rpassword::prompt_password(format!("Confirm new password for account {}: ", username))?;
+    if confirm_new_password != new_password {
+        return Err(eyre!("New passwords do not match."));
+    }
 
-    Ok(())
+    // Update account password.
+    vault.change_account_password(username, unlocked.password().to_owned(), new_password)
 }
 
 /// Delete an existing account along with all its files and passwords.
