@@ -42,10 +42,11 @@ where
 }
 
 /// Get the path of a file from the account and file names.
-pub fn get_file_path<P, S>(fs_dir: P, username: S, filename: S) -> eyre::Result<Utf8PathBuf>
+pub fn get_file_path<P, U, F>(fs_dir: P, username: U, filename: F) -> eyre::Result<Utf8PathBuf>
 where
     P: AsRef<Utf8Path>,
-    S: AsRef<str>,
+    U: AsRef<str>,
+    F: AsRef<str>,
 {
     let mut path = get_account_file_dir(fs_dir.as_ref(), username.as_ref())?;
     path.push(filename.as_ref());

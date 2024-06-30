@@ -58,9 +58,10 @@ impl Vault {
     // ACCOUNT FUNCTIONALITY
 
     /// Create a new [Account] & add it to the [Database].
-    pub fn create_new_account<S>(&mut self, username: S, password: S) -> eyre::Result<()>
+    pub fn create_new_account<U, P>(&mut self, username: U, password: P) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        P: AsRef<str>,
     {
         // Create a new account.
         let account = Account::new(username.as_ref(), password.as_ref())?;
@@ -107,13 +108,14 @@ impl Vault {
     }
 
     /// Load an [UnlockedAccount] with the given `username`.
-    pub fn load_unlocked_account<S>(
+    pub fn load_unlocked_account<U, P>(
         &self,
-        username: S,
-        password: S,
+        username: U,
+        password: P,
     ) -> eyre::Result<UnlockedAccount>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        P: AsRef<str>,
     {
         // Load the account.
         let loaded_account = self.load_account(username.as_ref())?;
@@ -122,14 +124,16 @@ impl Vault {
     }
 
     /// Change the password of an [Account].
-    pub fn change_account_password<S>(
+    pub fn change_account_password<U, O, N>(
         &mut self,
-        username: S,
-        old_password: S,
-        new_password: S,
+        username: U,
+        old_password: O,
+        new_password: N,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        O: AsRef<str>,
+        N: AsRef<str>,
     {
         // Load & unlock the account.
         let mut unlocked_account =
@@ -186,17 +190,21 @@ impl Vault {
     // CREDENTIAL FUNCTIONALITY
 
     /// Create a new [Credential] & add it to the [Database].
-    pub fn create_credential<S>(
+    pub fn create_credential<A, B, C, D, E>(
         &mut self,
-        owner_username: S,
+        owner_username: A,
         key: Aes256Key,
-        name: S,
-        username: S,
-        password: S,
-        notes: S,
+        name: B,
+        username: C,
+        password: D,
+        notes: E,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        A: AsRef<str>,
+        B: AsRef<str>,
+        C: AsRef<str>,
+        D: AsRef<str>,
+        E: AsRef<str>,
     {
         // Create the credential.
         let credential = Credential::try_new(
@@ -228,14 +236,15 @@ impl Vault {
     }
 
     /// Delete a [Credential] from the [Database], rolling back the changes on failure.
-    pub fn delete_credential<S>(
+    pub fn delete_credential<O, N>(
         &mut self,
-        owner_username: S,
-        name: S,
+        owner_username: O,
+        name: N,
         key: Aes256Key,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        O: AsRef<str>,
+        N: AsRef<str>,
     {
         // Find the credential to delete.
         let loaded_credential = self.load_credential(&owner_username, &name, key)?;
@@ -254,14 +263,15 @@ impl Vault {
     }
 
     /// Load the [Credential] with the given `owner_username` & `name`.
-    pub fn load_credential<S>(
+    pub fn load_credential<O, N>(
         &self,
-        owner_username: S,
-        name: S,
+        owner_username: O,
+        name: N,
         key: Aes256Key,
     ) -> eyre::Result<Credential>
     where
-        S: AsRef<str>,
+        O: AsRef<str>,
+        N: AsRef<str>,
     {
         // Get the credentials owned by this account.
         let owned_credentials = self.load_account_credentials(owner_username.as_ref())?;
@@ -289,17 +299,19 @@ impl Vault {
     }
 
     /// Update a [Credential]'s field.
-    pub fn update_credential<S>(
+    pub fn update_credential<O, N, V>(
         &mut self,
-        owner_username: S,
-        name: S,
+        owner_username: O,
+        name: N,
         key: Aes256Key,
         cipherbytes_field: CredentialUpdateField,
         nonce_field: CredentialUpdateField,
-        new_value: S,
+        new_value: V,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        O: AsRef<str>,
+        N: AsRef<str>,
+        V: AsRef<str>,
     {
         // Load the credential.
         let credential = self.load_credential(owner_username.as_ref(), name.as_ref(), key)?;
@@ -372,9 +384,10 @@ impl Vault {
 
     /// Delete a file and its corresponding [FileData] from the [Database], rolling back the
     /// changes on a failure.
-    pub fn delete_file<S>(&mut self, username: S, filename: S) -> eyre::Result<()>
+    pub fn delete_file<U, F>(&mut self, username: U, filename: F) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        F: AsRef<str>,
     {
         // Get the file path.
         let file_path = get_file_path(&self.filesystem_directory, &username, &filename)?;
@@ -389,14 +402,15 @@ impl Vault {
     }
 
     /// Load the file and [FileData] with the given `owner_username` & `filename`.
-    pub fn load_file<S, E>(
+    pub fn load_file<U, F, E>(
         &self,
-        username: S,
-        filename: S,
+        username: U,
+        filename: F,
         key: Aes256Key,
     ) -> eyre::Result<(FileData, E)>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        F: AsRef<str>,
         E: TryFromEncrypted,
     {
         // Get the file path.
@@ -424,15 +438,16 @@ impl Vault {
     }
 
     /// Update a file's content.
-    pub fn update_file<S, B>(
+    pub fn update_file<U, F, B>(
         &mut self,
-        username: S,
-        filename: S,
+        username: U,
+        filename: F,
         key: Aes256Key,
         new_file_contents: B,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        U: AsRef<str>,
+        F: AsRef<str>,
         B: AsRef<[u8]>,
     {
         // Get the file path.
@@ -835,7 +850,7 @@ mod tests {
             .delete_file("mr_awesome", "blah blah blah")
             .unwrap_err();
         let _ = vault
-            .load_file::<&str, Vec<u8>>("mr_awesome", "blah blah blah", unlocked2.key())
+            .load_file::<&str, &str, Vec<u8>>("mr_awesome", "blah blah blah", unlocked2.key())
             .unwrap_err();
         assert_eq!(
             vault.load_account_files_data("mr_awesome").unwrap().len(),
