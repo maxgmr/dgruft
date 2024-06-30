@@ -23,7 +23,7 @@ use database::Database;
 use database_traits::{AccountUpdateField, CredentialUpdateField, FileDataUpdateField};
 use filesystem::{
     get_account_file_dir, get_file_path, new_account_file_dir, new_file, open_file,
-    read_file_bytes, verify_writeable_dir,
+    read_file_bytes, verify_writeable_dir, write_file,
 };
 
 /// The [Vault] is reponsible for all saving, loading, and editing of `dgruft` data. It handles the
@@ -420,6 +420,37 @@ impl Vault {
             .select_owned_entries([owner_username.as_ref()])
     }
 
+    /// Update a file's content.
+    pub fn update_file<S, B>(
+        &mut self,
+        username: S,
+        filename: S,
+        key: Aes256Key,
+        new_file_contents: B,
+    ) -> eyre::Result<()>
+    where
+        S: AsRef<str>,
+        B: AsRef<[u8]>,
+    {
+        // Get the file path.
+        let file_path = get_file_path(&self.filesystem_directory, &username, &filename)?;
+        // Encrypt the new file contents.
+        let encrypted_contents = new_file_contents.as_ref().try_encrypt_with_key(key)?;
+        // Open a new transaction.
+        let tx = self.database.open_transaction()?;
+        // Update the file data contents nonce.
+        let num_rows = Database::transaction_update::<FileData, &Utf8Path, Aes256Nonce, 1, 1>(
+            [&file_path],
+            FileDataUpdateField::ContentsNonce,
+            [encrypted_contents.nonce()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Write the cipherbytes to the file.
+        write_file(&file_path, encrypted_contents.cipherbytes())?;
+        // Commit the transaction.
+        Ok(tx.commit()?)
+    }
     // Helper function: Ensure that exactly one row was updated.
     fn validate_one_row(num_rows: usize) -> eyre::Result<()> {
         match num_rows {
@@ -914,5 +945,45 @@ mod tests {
             .unwrap();
         let loaded_c = vault.load_credential(username, c_name, key).unwrap();
         assert_eq!(loaded_c.notes::<String>(key).unwrap(), new_c_notes);
+    }
+
+    #[test]
+    fn update_file() {
+        let db_name = "update_file.db";
+        let fs_name = "update_file";
+        let db_path = db_path(db_name);
+        let fs_dir = fs_dir(fs_name);
+        refresh_test_db(db_name);
+        refresh_test_fs(fs_name);
+
+        let mut vault = Vault::connect(&db_path, &fs_dir).unwrap();
+
+        let username = "mr_test";
+        let password = "open sesame!";
+        vault.create_new_account(username, password).unwrap();
+        let key = vault
+            .load_unlocked_account(username, password)
+            .unwrap()
+            .key();
+
+        let filename = "f";
+        let old_contents = "this is a test.";
+        vault
+            .create_file(filename, username, old_contents, key)
+            .unwrap();
+        let (loaded_file_data, decrypted_contents): (FileData, String) =
+            vault.load_file(username, filename, key).unwrap();
+        assert_eq!(loaded_file_data.filename(), filename);
+        assert_eq!(decrypted_contents, old_contents);
+
+        let new_contents = "this is a test, i sure hope it works!";
+        vault
+            .update_file(username, filename, key, new_contents)
+            .unwrap();
+
+        let (loaded_file_data, decrypted_contents): (FileData, String) =
+            vault.load_file(username, filename, key).unwrap();
+        assert_eq!(loaded_file_data.filename(), filename);
+        assert_eq!(decrypted_contents, new_contents);
     }
 }
