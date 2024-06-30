@@ -12,7 +12,7 @@ pub type Hash<const H: usize> = [u8; H];
 pub type Salt<const S: usize> = [u8; S];
 
 /// H bytes hashed and salted using PBKDF2-HMAC-SHA256 & a S-byte salt.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Hashed<const H: usize, const S: usize> {
     hash: Hash<H>,
     salt: Salt<S>,

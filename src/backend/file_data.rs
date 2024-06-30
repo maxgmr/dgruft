@@ -3,7 +3,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use super::encryption::encrypted::Aes256Nonce;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FileData {
     path: Utf8PathBuf,
     filename: String,

@@ -15,7 +15,7 @@ pub type Aes256Nonce = [u8; 12];
 pub type Aes256Key = [u8; 32];
 
 /// An encrypted byte array.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Encrypted {
     cipherbytes: Vec<u8>,
     nonce: Aes256Nonce,
