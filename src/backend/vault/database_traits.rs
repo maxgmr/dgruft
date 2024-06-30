@@ -68,13 +68,14 @@ impl HasSqlStatements for Account {
 }
 
 /// All the fields of [Credential] entries that may be updated.
+#[allow(dead_code)]
 pub enum CredentialUpdateField {
-    EncryptedUsernameCipherbytes,
-    EncryptedUsernameNonce,
-    EncryptedPasswordCipherbytes,
-    EncryptedPasswordNonce,
-    EncryptedNotesCipherbytes,
-    EncryptedNotesNonce,
+    UsernameCipherbytes,
+    UsernameNonce,
+    PasswordCipherbytes,
+    PasswordNonce,
+    NotesCipherbytes,
+    NotesNonce,
 }
 impl HasSqlStatements for Credential {
     type UpdateField = CredentialUpdateField;
@@ -93,22 +94,18 @@ impl HasSqlStatements for Credential {
 
     fn sql_update(field: Self::UpdateField) -> &'static str {
         match field {
-            CredentialUpdateField::EncryptedUsernameCipherbytes => {
+            CredentialUpdateField::UsernameCipherbytes => {
                 UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_CIPHERBYTES
             }
-            CredentialUpdateField::EncryptedUsernameNonce => {
-                UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE
-            }
-            CredentialUpdateField::EncryptedPasswordCipherbytes => {
+            CredentialUpdateField::UsernameNonce => UPDATE_CREDENTIAL_ENCRYPTED_USERNAME_NONCE,
+            CredentialUpdateField::PasswordCipherbytes => {
                 UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_CIPHERBYTES
             }
-            CredentialUpdateField::EncryptedPasswordNonce => {
-                UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_NONCE
-            }
-            CredentialUpdateField::EncryptedNotesCipherbytes => {
+            CredentialUpdateField::PasswordNonce => UPDATE_CREDENTIAL_ENCRYPTED_PASSWORD_NONCE,
+            CredentialUpdateField::NotesCipherbytes => {
                 UPDATE_CREDENTIAL_ENCRYPTED_NOTES_CIPHERBYTES
             }
-            CredentialUpdateField::EncryptedNotesNonce => UPDATE_CREDENTIAL_ENCRYPTED_NOTES_NONCE,
+            CredentialUpdateField::NotesNonce => UPDATE_CREDENTIAL_ENCRYPTED_NOTES_NONCE,
         }
     }
 }

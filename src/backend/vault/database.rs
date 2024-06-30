@@ -618,7 +618,7 @@ mod tests {
         assert_eq!(
             db.update_entry::<Credential, &[u8], &[u8], 2, 1>(
                 c_primary_key,
-                CredentialUpdateField::EncryptedUsernameCipherbytes,
+                CredentialUpdateField::UsernameCipherbytes,
                 [ec_username.cipherbytes()],
             )
             .unwrap(),
@@ -627,7 +627,7 @@ mod tests {
         assert_eq!(
             db.update_entry::<Credential, &[u8], Aes256Nonce, 2, 1>(
                 c_primary_key,
-                CredentialUpdateField::EncryptedUsernameNonce,
+                CredentialUpdateField::UsernameNonce,
                 [ec_username.nonce()],
             )
             .unwrap(),
@@ -637,7 +637,7 @@ mod tests {
         let _ = db
             .update_entry::<Credential, &[u8], &[u8], 2, 1>(
                 [username.as_bytes(), b"DNE"],
-                CredentialUpdateField::EncryptedUsernameCipherbytes,
+                CredentialUpdateField::UsernameCipherbytes,
                 [b"DNE"],
             )
             .unwrap_err();

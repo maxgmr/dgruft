@@ -908,8 +908,8 @@ mod tests {
                 username,
                 c_name,
                 key,
-                CredentialUpdateField::EncryptedUsernameCipherbytes,
-                CredentialUpdateField::EncryptedUsernameNonce,
+                CredentialUpdateField::UsernameCipherbytes,
+                CredentialUpdateField::UsernameNonce,
                 new_c_username,
             )
             .unwrap();
@@ -923,8 +923,8 @@ mod tests {
                 username,
                 c_name,
                 key,
-                CredentialUpdateField::EncryptedPasswordCipherbytes,
-                CredentialUpdateField::EncryptedPasswordNonce,
+                CredentialUpdateField::PasswordCipherbytes,
+                CredentialUpdateField::PasswordNonce,
                 new_c_password,
             )
             .unwrap();
@@ -938,8 +938,8 @@ mod tests {
                 username,
                 c_name,
                 key,
-                CredentialUpdateField::EncryptedNotesCipherbytes,
-                CredentialUpdateField::EncryptedNotesNonce,
+                CredentialUpdateField::NotesCipherbytes,
+                CredentialUpdateField::NotesNonce,
                 new_c_notes,
             )
             .unwrap();
