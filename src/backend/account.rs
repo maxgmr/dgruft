@@ -27,8 +27,6 @@ pub struct Account {
     dbl_hashed_password: Hashed<32, 64>,
     encrypted_key: Encrypted,
 }
-// TODO: Ideally, all interactions with Accounts, FileDatas, Credentials, etc. should be only
-// through the Vault.
 impl Account {
     /// Create a new [Account] from a username and a password.
     pub fn new(username: &str, password: &str) -> eyre::Result<Self> {
