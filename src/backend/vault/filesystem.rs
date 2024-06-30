@@ -7,12 +7,6 @@ use std::{
 use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
 
-use super::super::{
-    account::Account,
-    encryption::encrypted::{Aes256Key, TryFromEncrypted},
-};
-use crate::utils::account_dir;
-
 /// Ensure that a given path exists, is a directory, and is not read-only.
 pub fn verify_writeable_dir<P>(path: P) -> eyre::Result<()>
 where
