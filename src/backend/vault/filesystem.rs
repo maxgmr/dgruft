@@ -99,3 +99,13 @@ where
         .create(false)
         .open(path.as_ref())?)
 }
+
+/// Open an existing [File] and write the bytes to the file, overwriting the existing contents.
+pub fn write_file<P, B>(path: P, bytes: B) -> eyre::Result<()>
+where
+    P: AsRef<Utf8Path>,
+    B: AsRef<[u8]>,
+{
+    let mut f = open_file(path)?;
+    Ok(f.write_all(bytes.as_ref())?)
+}
