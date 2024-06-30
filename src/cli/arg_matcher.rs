@@ -15,11 +15,14 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
     match args.command {
         Command::Accounts {
             new,
+            list,
             delete,
             force_delete,
         } => {
             if new {
                 new_account(args.username, password)?;
+            } else if list {
+                list_accounts(args.username, password)?;
             } else if delete {
                 delete_account(args.username, password, false)?;
             } else if force_delete {

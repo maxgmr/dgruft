@@ -36,6 +36,9 @@ pub enum Command {
         /// Create a new account.
         #[clap(short, long)]
         new: bool,
+        /// List all accounts.
+        #[clap(short, long)]
+        list: bool,
         /// Delete an account.
         #[clap(short = 'd', long = "delete")]
         delete: bool,
