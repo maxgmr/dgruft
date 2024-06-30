@@ -14,7 +14,7 @@ use super::{
     account::{Account, UnlockedAccount},
     credential::Credential,
     encryption::encrypted::{
-        self, Aes256Key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+        Aes256Key, Aes256Nonce, Encrypted, TryFromEncrypted, TryIntoEncrypted,
     },
     file_data::FileData,
     hashing::hashed::{Hash, Salt},
@@ -283,6 +283,50 @@ impl Vault {
     {
         self.database
             .select_owned_entries([owner_username.as_ref()])
+    }
+
+    /// Update a [Credential]'s field.
+    pub fn update_credential<S>(
+        &mut self,
+        owner_username: S,
+        name: S,
+        key: Aes256Key,
+        cipherbytes_field: CredentialUpdateField,
+        nonce_field: CredentialUpdateField,
+        new_value: S,
+    ) -> eyre::Result<()>
+    where
+        S: AsRef<str>,
+    {
+        // Load the credential.
+        let credential = self.load_credential(owner_username.as_ref(), name.as_ref(), key)?;
+        // Get the primary key of the credential.
+        let primary_key = [
+            owner_username.as_ref().as_bytes(),
+            credential.encrypted_name().cipherbytes(),
+        ];
+        // Encrypt the new value.
+        let encrypted_new_value = new_value.as_ref().try_encrypt_with_key(key)?;
+        // Open a new transaction.
+        let tx = self.database.open_transaction()?;
+        // Update the field's cipherbytes.
+        let num_rows = Database::transaction_update::<Credential, &[u8], &[u8], 2, 1>(
+            primary_key,
+            cipherbytes_field,
+            [encrypted_new_value.cipherbytes()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Update the field's nonce.
+        let num_rows = Database::transaction_update::<Credential, &[u8], Aes256Nonce, 2, 1>(
+            primary_key,
+            nonce_field,
+            [encrypted_new_value.nonce()],
+            &tx,
+        )?;
+        Self::validate_one_row(num_rows)?;
+        // Commit the transaction.
+        Ok(tx.commit()?)
     }
 
     // FILE FUNCTIONALITY
@@ -794,5 +838,81 @@ mod tests {
             .key();
         let (_, fcontents): (_, String) = vault.load_file(username, filename, key).unwrap();
         assert_eq!(fcontents, contents);
+    }
+
+    #[test]
+    fn update_credential() {
+        let db_name = "update_credential.db";
+        let fs_name = "update_credential";
+        let db_path = db_path(db_name);
+        let fs_dir = fs_dir(fs_name);
+        refresh_test_db(db_name);
+        refresh_test_fs(fs_name);
+
+        let mut vault = Vault::connect(&db_path, &fs_dir).unwrap();
+
+        let username = "mr_test";
+        let password = "open sesame!";
+        vault.create_new_account(username, password).unwrap();
+        let key = vault
+            .load_unlocked_account(username, password)
+            .unwrap()
+            .key();
+
+        let c_name = "c1";
+        let c_username = "my_account";
+        let c_password = "my_password";
+        let c_notes = "my_notes";
+
+        vault
+            .create_credential(username, key, c_name, c_username, c_password, c_notes)
+            .unwrap();
+        let loaded_c = vault.load_credential(username, c_name, key).unwrap();
+        assert_eq!(loaded_c.username::<String>(key).unwrap(), c_username);
+
+        let new_c_username = "my_new_account";
+
+        vault
+            .update_credential(
+                username,
+                c_name,
+                key,
+                CredentialUpdateField::EncryptedUsernameCipherbytes,
+                CredentialUpdateField::EncryptedUsernameNonce,
+                new_c_username,
+            )
+            .unwrap();
+        let loaded_c = vault.load_credential(username, c_name, key).unwrap();
+        assert_eq!(loaded_c.username::<String>(key).unwrap(), new_c_username);
+
+        let new_c_password = "my_new_password";
+
+        vault
+            .update_credential(
+                username,
+                c_name,
+                key,
+                CredentialUpdateField::EncryptedPasswordCipherbytes,
+                CredentialUpdateField::EncryptedPasswordNonce,
+                new_c_password,
+            )
+            .unwrap();
+        let loaded_c = vault.load_credential(username, c_name, key).unwrap();
+        assert_eq!(loaded_c.password::<String>(key).unwrap(), new_c_password);
+
+        let new_c_notes = "my_new_notes";
+
+        vault
+            .update_credential(
+                username,
+                c_name,
+                key,
+                CredentialUpdateField::EncryptedNotesCipherbytes,
+                CredentialUpdateField::EncryptedNotesNonce,
+                new_c_notes,
+            )
+            .unwrap();
+        let loaded_c = vault.load_credential(username, c_name, key).unwrap();
+        assert_eq!(loaded_c.notes::<String>(key).unwrap(), new_c_notes);
     }
 }
