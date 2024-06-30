@@ -29,7 +29,7 @@ pub enum Command {
         group(
             ArgGroup::new("account")
                 .required(true)
-                .args(&["new", "list", "delete", "force_delete"])
+                .args(&["new", "list", "password_change", "delete", "force_delete"])
         )
     )]
     Accounts {
@@ -39,6 +39,9 @@ pub enum Command {
         /// List all accounts.
         #[clap(short, long)]
         list: bool,
+        /// Change an account's password.
+        #[clap(short = 'p', long = "passwordchange")]
+        password_change: bool,
         /// Delete an account.
         #[clap(short = 'd', long = "delete")]
         delete: bool,

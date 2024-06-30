@@ -4,14 +4,19 @@ use std::io::{self, Write};
 use color_eyre::eyre::{self, eyre};
 
 use crate::{
-    backend::{account::Account, vault::Vault},
+    backend::{
+        account::{Account, UnlockedAccount},
+        vault::Vault,
+    },
     utils::{data_dir, db_path},
 };
 
 // ACCOUNTS
 
 /// Create a new account.
-pub fn new_account(username: String, password: String) -> eyre::Result<()> {
+pub fn new_account(username: String) -> eyre::Result<()> {
+    // Prompt for password.
+    let password = prompt_password(&username)?;
     // Confirm password.
     let confirm_password =
         rpassword::prompt_password(format!("Confirm password for new account {}: ", username))?;
@@ -47,13 +52,26 @@ pub fn list_accounts() -> eyre::Result<()> {
     Ok(())
 }
 
-/// Delete an existing account along with all its files and passwords.
-pub fn delete_account(username: String, password: String, force: bool) -> eyre::Result<()> {
+/// Change an account's password.
+pub fn change_password(username: String) -> eyre::Result<()> {
     // Connect to the vault.
     let mut vault = vault_connect()?;
 
-    // Ensure account exists.
-    let unlocked = vault.load_unlocked_account(&username, &password)?;
+    // Confirm new password.
+    let new_password =
+        rpassword::prompt_password(format!("New password for account {}: ", username))?;
+    let confirm_new_password =
+        rpassword::prompt_password(format!("Confirm new password for account {}: ", username))?;
+
+    Ok(())
+}
+
+/// Delete an existing account along with all its files and passwords.
+pub fn delete_account(username: String, force: bool) -> eyre::Result<()> {
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
 
     // Get all files & credentials of this account.
     let credentials = vault.load_account_credentials(&username)?;
@@ -83,27 +101,19 @@ pub fn delete_account(username: String, password: String, force: bool) -> eyre::
 // CREDENTIALS
 
 /// Create a new credential.
-pub fn new_credential(
-    username: String,
-    password: String,
-    credentialname: String,
-) -> eyre::Result<()> {
+pub fn new_credential(username: String, credentialname: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
 
 /// Open & edit an existing credential.
-pub fn open_credential(
-    username: String,
-    password: String,
-    credentialname: String,
-) -> eyre::Result<()> {
+pub fn open_credential(username: String, credentialname: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
 
 /// List all credentials owned by the given account.
-pub fn list_credentials(username: String, password: String) -> eyre::Result<()> {
+pub fn list_credentials(username: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
@@ -111,7 +121,6 @@ pub fn list_credentials(username: String, password: String) -> eyre::Result<()> 
 /// Delete a credential.
 pub fn delete_credential(
     username: String,
-    password: String,
     credentialname: String,
     force: bool,
 ) -> eyre::Result<()> {
@@ -122,30 +131,25 @@ pub fn delete_credential(
 // FILES
 
 /// Create a new file.
-pub fn new_file(username: String, password: String, filename: String) -> eyre::Result<()> {
+pub fn new_file(username: String, filename: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
 
 /// Open & edit an existing file.
-pub fn open_file(username: String, password: String, filename: String) -> eyre::Result<()> {
+pub fn open_file(username: String, filename: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
 
 /// List all files owned by the given account.
-pub fn list_files(username: String, password: String) -> eyre::Result<()> {
+pub fn list_files(username: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
 
 /// Delete a file.
-pub fn delete_file(
-    username: String,
-    password: String,
-    filename: String,
-    force: bool,
-) -> eyre::Result<()> {
+pub fn delete_file(username: String, filename: String, force: bool) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
@@ -157,6 +161,21 @@ fn vault_connect() -> eyre::Result<Vault> {
     Vault::connect(db_path()?, data_dir()?)
 }
 
+// Verify login into correct, returning account data.
+fn login(vault: &Vault, username: &str) -> eyre::Result<UnlockedAccount> {
+    let password = prompt_password(username)?;
+    vault.load_unlocked_account(username, &password)
+}
+
+// Password prompt.
+fn prompt_password(username: &str) -> eyre::Result<String> {
+    Ok(rpassword::prompt_password(format!(
+        "Password for {}: ",
+        username
+    ))?)
+}
+
+// CLI confirmation message.
 fn cli_confirm(message: String, default: bool) -> eyre::Result<bool> {
     print!("{}", message);
     let mut input = String::new();

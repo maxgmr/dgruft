@@ -8,25 +8,25 @@ use super::{
 
 /// This statement matches the CLI arguments with its proper functionality in `processes`.
 pub fn match_args(args: Cli) -> eyre::Result<()> {
-    // Prompt for password.
-    let password = rpassword::prompt_password(format!("Password for {}: ", args.username))?;
-
     // Match the CLI commands/arguments.
     match args.command {
         Command::Accounts {
             new,
             list,
+            password_change,
             delete,
             force_delete,
         } => {
             if new {
-                new_account(args.username, password)?;
+                new_account(args.username)?;
             } else if list {
                 list_accounts()?;
+            } else if password_change {
+                change_password(args.username)?;
             } else if delete {
-                delete_account(args.username, password, false)?;
+                delete_account(args.username, false)?;
             } else if force_delete {
-                delete_account(args.username, password, true)?;
+                delete_account(args.username, true)?;
             } else {
                 return Err(eyre!("Invalid option combination."));
             }
@@ -40,15 +40,15 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
             credentialname,
         } => {
             if new {
-                new_credential(args.username, password, credentialname.unwrap())?;
+                new_credential(args.username, credentialname.unwrap())?;
             } else if open {
-                open_credential(args.username, password, credentialname.unwrap())?;
+                open_credential(args.username, credentialname.unwrap())?;
             } else if list {
-                list_credentials(args.username, password)?;
+                list_credentials(args.username)?;
             } else if delete {
-                delete_credential(args.username, password, credentialname.unwrap(), false)?;
+                delete_credential(args.username, credentialname.unwrap(), false)?;
             } else if force_delete {
-                delete_credential(args.username, password, credentialname.unwrap(), true)?;
+                delete_credential(args.username, credentialname.unwrap(), true)?;
             } else {
                 return Err(eyre!("Invalid option combination."));
             }
@@ -62,15 +62,15 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
             filename,
         } => {
             if new {
-                new_file(args.username, password, filename.unwrap())?;
+                new_file(args.username, filename.unwrap())?;
             } else if open {
-                open_file(args.username, password, filename.unwrap())?;
+                open_file(args.username, filename.unwrap())?;
             } else if list {
-                list_files(args.username, password)?;
+                list_files(args.username)?;
             } else if delete {
-                delete_file(args.username, password, filename.unwrap(), false)?;
+                delete_file(args.username, filename.unwrap(), false)?;
             } else if force_delete {
-                delete_file(args.username, password, filename.unwrap(), true)?;
+                delete_file(args.username, filename.unwrap(), true)?;
             } else {
                 return Err(eyre!("Invalid option combination."));
             }
