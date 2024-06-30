@@ -1,5 +1,5 @@
 //! All backend functionality.
-mod account;
+pub mod account;
 mod credential;
 mod encryption;
 mod file_data;
