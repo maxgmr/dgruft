@@ -22,7 +22,7 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
             if new {
                 new_account(args.username, password)?;
             } else if list {
-                list_accounts(args.username, password)?;
+                list_accounts()?;
             } else if delete {
                 delete_account(args.username, password, false)?;
             } else if force_delete {
