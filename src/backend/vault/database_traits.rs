@@ -16,6 +16,7 @@ use super::{
     sql_statements::*,
 };
 
+/// Implementors of this trait have a set of basic, core SQLite statements.
 pub trait HasSqlStatements {
     /// This enum defines the names of the fields that can be updated.
     type UpdateField;
@@ -27,6 +28,9 @@ pub trait HasSqlStatements {
 
     /// This function defines the SQLite statement used to select an entry of this type.
     fn sql_select() -> &'static str;
+
+    /// This function defines the SQLite statement used to select all entries of this type.
+    fn sql_select_all() -> &'static str;
 
     /// This function defines the SQLite statement used to update an entry of this type.
     fn sql_update(field: Self::UpdateField) -> &'static str;
@@ -54,6 +58,10 @@ impl HasSqlStatements for Account {
 
     fn sql_select() -> &'static str {
         SELECT_ACCOUNT
+    }
+
+    fn sql_select_all() -> &'static str {
+        SELECT_ALL_ACCOUNTS
     }
 
     fn sql_update(field: Self::UpdateField) -> &'static str {
@@ -92,6 +100,10 @@ impl HasSqlStatements for Credential {
         SELECT_CREDENTIAL
     }
 
+    fn sql_select_all() -> &'static str {
+        SELECT_ALL_CREDENTIALS
+    }
+
     fn sql_update(field: Self::UpdateField) -> &'static str {
         match field {
             CredentialUpdateField::UsernameCipherbytes => {
@@ -127,6 +139,10 @@ impl HasSqlStatements for FileData {
 
     fn sql_select() -> &'static str {
         SELECT_FILE_DATA
+    }
+
+    fn sql_select_all() -> &'static str {
+        SELECT_ALL_FILES_DATA
     }
 
     fn sql_update(field: Self::UpdateField) -> &'static str {

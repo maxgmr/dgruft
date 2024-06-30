@@ -92,6 +92,22 @@ impl Database {
         let rows = statement.query_map(params_from_iter(params), |row| {
             Ok(T::try_from_database(row))
         })?;
+
+        let mut results = Vec::new();
+        for query_result in rows {
+            results.push(query_result??);
+        }
+        Ok(results)
+    }
+
+    /// Select all entries of a given type.
+    pub fn select_all_entries<T>(&self) -> eyre::Result<Vec<T>>
+    where
+        T: TryFromDatabase + HasSqlStatements,
+    {
+        let mut statement = self.connection.prepare(T::sql_select_all())?;
+        let rows = statement.query_map([], |row| Ok(T::try_from_database(row)))?;
+
         let mut results = Vec::new();
         for query_result in rows {
             results.push(query_result??);
@@ -403,6 +419,91 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decrypted_contents, "test");
+    }
+
+    #[test]
+    fn select_all() {
+        let db_path = "tests/select_all.db";
+        let db = refresh_test_db(db_path);
+
+        let acc1 = Account::new("a1", "p1").unwrap();
+        db.insert_entry(acc1.clone()).unwrap();
+        let acc2 = Account::new("a2", "p2").unwrap();
+        db.insert_entry(acc2.clone()).unwrap();
+
+        let accs = db.select_all_entries::<Account>().unwrap();
+        assert_eq!(accs.len(), 2);
+        assert!(accs.iter().any(|e| *e == acc1));
+        assert!(accs.iter().any(|e| *e == acc2));
+
+        let acc3 = Account::new("a3", "p3").unwrap();
+        db.insert_entry(acc3.clone()).unwrap();
+
+        let accs = db.select_all_entries::<Account>().unwrap();
+        assert_eq!(accs.len(), 3);
+        assert!(accs.iter().any(|e| *e == acc1));
+        assert!(accs.iter().any(|e| *e == acc2));
+        assert!(accs.iter().any(|e| *e == acc3));
+
+        db.delete_entry::<Account, &str, 1>(["a1"]).unwrap();
+
+        let accs = db.select_all_entries::<Account>().unwrap();
+        assert_eq!(accs.len(), 2);
+        assert!(accs.iter().any(|e| *e == acc2));
+        assert!(accs.iter().any(|e| *e == acc3));
+
+        let f21 = FileData::new(
+            Utf8PathBuf::from("tests/f21"),
+            "f21".to_owned(),
+            "a2".to_owned(),
+            [0u8; 12],
+        );
+        db.insert_entry(f21.clone()).unwrap();
+
+        let f31 = FileData::new(
+            Utf8PathBuf::from("tests/f31"),
+            "f31".to_owned(),
+            "a3".to_owned(),
+            [0u8; 12],
+        );
+        db.insert_entry(f31.clone()).unwrap();
+
+        let files = db.select_all_entries::<FileData>().unwrap();
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|e| *e == f21));
+        assert!(files.iter().any(|e| *e == f31));
+
+        let f32 = FileData::new(
+            Utf8PathBuf::from("tests/f32"),
+            "f32".to_owned(),
+            "a3".to_owned(),
+            [0u8; 12],
+        );
+        db.insert_entry(f32.clone()).unwrap();
+
+        let files = db.select_all_entries::<FileData>().unwrap();
+        assert_eq!(files.len(), 3);
+        assert!(files.iter().any(|e| *e == f21));
+        assert!(files.iter().any(|e| *e == f31));
+        assert!(files.iter().any(|e| *e == f32));
+
+        db.delete_entry::<Account, &str, 1>(["a3"]).unwrap();
+
+        let accs = db.select_all_entries::<Account>().unwrap();
+        assert_eq!(accs.len(), 1);
+        assert!(accs.iter().any(|e| *e == acc2));
+
+        let files = db.select_all_entries::<FileData>().unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(files.iter().any(|e| *e == f21));
+
+        db.delete_entry::<Account, &str, 1>(["a2"]).unwrap();
+
+        let accs = db.select_all_entries::<Account>().unwrap();
+        assert!(accs.is_empty());
+
+        let files = db.select_all_entries::<FileData>().unwrap();
+        assert!(files.is_empty());
     }
 
     #[test]

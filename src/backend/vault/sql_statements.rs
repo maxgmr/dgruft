@@ -11,6 +11,17 @@ pub const SELECT_ACCOUNT: &str = "
         username = ?1
 ";
 
+pub const SELECT_ALL_ACCOUNTS: &str = "
+    SELECT
+        username,
+        password_salt,
+        dbl_hashed_password_hash,
+        dbl_hashed_password_salt,
+        encrypted_key_cipherbytes,
+        encrypted_key_nonce
+    FROM accounts
+";
+
 pub const INSERT_ACCOUNT: &str = "
     INSERT INTO accounts (
         username,
@@ -74,6 +85,20 @@ pub const SELECT_CREDENTIAL: &str = "
     WHERE
         owner_username = ?1
         AND encrypted_name_cipherbytes = ?2
+";
+
+pub const SELECT_ALL_CREDENTIALS: &str = "
+    SELECT
+        owner_username,
+        encrypted_name_cipherbytes,
+        encrypted_name_nonce,
+        encrypted_username_cipherbytes,
+        encrypted_username_nonce,
+        encrypted_password_cipherbytes,
+        encrypted_password_nonce,
+        encrypted_notes_cipherbytes,
+        encrypted_notes_nonce
+    FROM credentials
 ";
 
 pub const SELECT_ACCOUNT_CREDENTIALS: &str = "
@@ -171,6 +196,15 @@ pub const SELECT_FILE_DATA: &str = "
     FROM files_data
     WHERE
         path = ?1
+";
+
+pub const SELECT_ALL_FILES_DATA: &str = "
+    SELECT
+        path,
+        filename,
+        owner_username,
+        contents_nonce
+    FROM files_data
 ";
 
 pub const SELECT_ACCOUNT_FILES_DATA: &str = "
