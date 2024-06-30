@@ -29,7 +29,7 @@ pub enum Command {
         group(
             ArgGroup::new("account")
                 .required(true)
-                .args(&["new", "delete", "force_delete"])
+                .args(&["new", "list", "delete", "force_delete"])
         )
     )]
     Accounts {

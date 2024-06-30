@@ -20,7 +20,7 @@ pub fn new_account(username: String, password: String) -> eyre::Result<()> {
     }
 
     // Connect to the vault.
-    let mut vault = Vault::connect(db_path()?, data_dir()?)?;
+    let mut vault = vault_connect()?;
 
     // Add the new account.
     vault.create_new_account(username, password)?;
@@ -31,7 +31,7 @@ pub fn new_account(username: String, password: String) -> eyre::Result<()> {
 /// List all existing accounts.
 pub fn list_accounts() -> eyre::Result<()> {
     // Connect to the vault.
-    let mut vault = Vault::connect(db_path()?, data_dir()?)?;
+    let vault = vault_connect()?;
 
     // Load all accounts.
     let accounts = vault.load_all::<Account>()?;
@@ -49,7 +49,34 @@ pub fn list_accounts() -> eyre::Result<()> {
 
 /// Delete an existing account along with all its files and passwords.
 pub fn delete_account(username: String, password: String, force: bool) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+
+    // Ensure account exists.
+    let unlocked = vault.load_unlocked_account(&username, &password)?;
+
+    // Get all files & credentials of this account.
+    let credentials = vault.load_account_credentials(&username)?;
+    let files = vault.load_account_files_data(&username)?;
+
+    if !force
+        && !cli_confirm(
+            format!(
+                "Really delete account {} with {} credential(s) & {} file(s)? [y/N] ",
+                unlocked.username(),
+                credentials.len(),
+                files.len()
+            ),
+            false,
+        )?
+    {
+        println!("Account deletion cancelled.");
+        return Ok(());
+    }
+
+    // Delete account and all its associated files.
+    vault.delete_account(username)?;
+
     Ok(())
 }
 
@@ -123,14 +150,27 @@ pub fn delete_file(
     Ok(())
 }
 
-// CLI confirmation prompt.
-fn cli_confirm(message: String) -> eyre::Result<bool> {
+// HELPERS
+
+// Connect to the vault.
+fn vault_connect() -> eyre::Result<Vault> {
+    Vault::connect(db_path()?, data_dir()?)
+}
+
+fn cli_confirm(message: String, default: bool) -> eyre::Result<bool> {
     print!("{}", message);
     let mut input = String::new();
     io::stdout().flush()?;
     io::stdin().read_line(&mut input)?;
-    match input.to_lowercase().chars().next() {
-        Some('y') => Ok(true),
-        _ => Ok(false),
+    if default {
+        match input.to_lowercase().chars().next() {
+            Some('n') => Ok(true),
+            _ => Ok(false),
+        }
+    } else {
+        match input.to_lowercase().chars().next() {
+            Some('y') => Ok(true),
+            _ => Ok(false),
+        }
     }
 }
