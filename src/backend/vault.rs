@@ -20,7 +20,10 @@ use super::{
     hashing::hashed::{Hash, Salt},
 };
 use database::Database;
-use database_traits::{AccountUpdateField, CredentialUpdateField, FileDataUpdateField};
+use database_traits::{
+    AccountUpdateField, CredentialUpdateField, FileDataUpdateField, HasSqlStatements,
+    TryFromDatabase,
+};
 use filesystem::{
     get_account_file_dir, get_file_path, new_account_file_dir, new_file, open_file,
     read_file_bytes, verify_writeable_dir, write_file,
@@ -459,6 +462,16 @@ impl Vault {
                 "Tried to update 1 row; {num} matches found. No changes to database were made."
             )),
         }
+    }
+
+    // GENERAL
+
+    /// Load all of a given entity.
+    pub fn load_all<T>(&self) -> eyre::Result<Vec<T>>
+    where
+        T: TryFromDatabase + HasSqlStatements,
+    {
+        self.database.select_all_entries::<T>()
     }
 }
 
