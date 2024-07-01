@@ -75,7 +75,7 @@ pub enum Command {
         #[clap(short = 'd', long = "delete", requires = "filename")]
         delete: bool,
         /// Delete a file without confirmation.
-        #[clap(short = 'd', long = "delete", requires = "filename")]
+        #[clap(short = 'D', long = "forcedelete", requires = "filename")]
         force_delete: bool,
         /// The name of the file.
         filename: Option<String>,
