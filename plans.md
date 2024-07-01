@@ -1,7 +1,7 @@
 # Planned Features
 
+- Clean temp dir on startup and shutdown
 - Input limitations (i.e., usernames/passwords can't be too long)
-- Change password
 - Edit in default text editor
 - Pipe file/credentials list to stdout for usage with fzf, less, grep, etc.
 - "Vault sync" utility that allows user to fix any issues with filesystem/database coherency
