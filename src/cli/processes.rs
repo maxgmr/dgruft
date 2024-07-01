@@ -148,8 +148,8 @@ pub fn list_credentials(username: String) -> eyre::Result<()> {
     // Login.
     let unlocked = login(&vault, &username)?;
 
-    // Load all credentials.
-    let credentials = vault.load_all::<Credential>()?;
+    // Load all owned credentials.
+    let credentials = vault.load_account_credentials(&username)?;
     // Convert to credential names.
     let mut credential_names = credentials
         .iter()
@@ -160,7 +160,7 @@ pub fn list_credentials(username: String) -> eyre::Result<()> {
 
     let credential_names_string = credential_names
         .iter()
-        .fold(String::new(), |acc, next| acc + &next + "\n");
+        .fold(String::new(), |acc, next| acc + next + "\n");
 
     // Print credential names.
     println!("{}", credential_names_string);
@@ -204,7 +204,15 @@ pub fn delete_credential(
 
 /// Create a new file.
 pub fn new_file(username: String, filename: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Add empty file to vault.
+    vault.create_file(&filename, username, &b""[..], unlocked.key())?;
+
+    println!("File \"{}\" created.", filename);
     Ok(())
 }
 
@@ -216,13 +224,60 @@ pub fn open_file(username: String, filename: String) -> eyre::Result<()> {
 
 /// List all files owned by the given account.
 pub fn list_files(username: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Load all owned files data.
+    let files = vault.load_account_files_data(&username)?;
+    // Convert to file names.
+    let mut file_names = files
+        .iter()
+        .map(|file| file.filename())
+        .collect::<Vec<&str>>();
+
+    file_names.sort_unstable();
+
+    let file_names_string = file_names
+        .iter()
+        .fold(String::new(), |acc, next| acc + next + "\n");
+
+    // Print file names.
+    println!("{}", file_names_string);
+
     Ok(())
 }
 
 /// Delete a file.
 pub fn delete_file(username: String, filename: String, force: bool) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Load file data.
+    let (file_data, file_contents): (FileData, Vec<u8>) =
+        vault.load_file(unlocked.username(), filename, unlocked.key())?;
+
+    if !force
+        && !cli_confirm(
+            format!(
+                "Really delete file \"{}\" ({} bytes)? [y/N] ",
+                file_data.filename(),
+                file_contents.len()
+            ),
+            false,
+        )?
+    {
+        println!("File deletion cancelled.");
+        return Ok(());
+    }
+
+    // Delete file.
+    vault.delete_file(username, file_data.filename())?;
+
+    println!("File \"{}\" deleted.", file_data.filename());
     Ok(())
 }
 
