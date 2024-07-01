@@ -25,8 +25,9 @@ pub fn new_account(username: String) -> eyre::Result<()> {
     let mut vault = vault_connect()?;
 
     // Add the new account.
-    vault.create_new_account(username, password)?;
+    vault.create_new_account(&username, password)?;
 
+    println!("Account {} created.", username);
     Ok(())
 }
 
@@ -67,7 +68,10 @@ pub fn change_password(username: String) -> eyre::Result<()> {
     }
 
     // Update account password.
-    vault.change_account_password(username, unlocked.password(), new_password)
+    vault.change_account_password(&username, unlocked.password(), new_password)?;
+
+    println!("{} password updated.", username);
+    Ok(())
 }
 
 /// Delete an existing account along with all its files and passwords.
@@ -97,8 +101,9 @@ pub fn delete_account(username: String, force: bool) -> eyre::Result<()> {
     }
 
     // Delete account and all its associated files.
-    vault.delete_account(username)?;
+    vault.delete_account(&username)?;
 
+    println!("Account {} deleted.", username);
     Ok(())
 }
 
@@ -120,12 +125,13 @@ pub fn new_credential(username: String, credentialname: String) -> eyre::Result<
     vault.create_credential(
         unlocked.username(),
         unlocked.key(),
-        credentialname,
+        &credentialname,
         credential_username,
         credential_password,
         credential_notes,
     )?;
 
+    println!("Credential \"{}\" created.", credentialname);
     Ok(())
 }
 
@@ -168,7 +174,29 @@ pub fn delete_credential(
     credentialname: String,
     force: bool,
 ) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Load credential.
+    let credential = vault.load_credential(unlocked.username(), credentialname, unlocked.key())?;
+    let loaded_name: String = credential.name(unlocked.key())?;
+
+    if !force
+        && !cli_confirm(
+            format!("Really delete credential \"{}\"? [y/N] ", loaded_name,),
+            false,
+        )?
+    {
+        println!("Credential deletion cancelled.");
+        return Ok(());
+    }
+
+    // Delete credential.
+    vault.delete_credential(username, &loaded_name, unlocked.key())?;
+
+    println!("Credential \"{}\" deleted.", loaded_name);
     Ok(())
 }
 
