@@ -347,15 +347,16 @@ impl Vault {
     // FILE FUNCTIONALITY
 
     /// Create a new file, along with its corresponding [FileData], & add it to the [Database].
-    pub fn create_file<S, E>(
+    pub fn create_file<F, O, E>(
         &mut self,
-        filename: S,
-        owner_username: S,
+        filename: F,
+        owner_username: O,
         contents: E,
         key: Aes256Key,
     ) -> eyre::Result<()>
     where
-        S: AsRef<str>,
+        F: AsRef<str>,
+        O: AsRef<str>,
         E: TryIntoEncrypted,
     {
         // Get the future path of this file.
