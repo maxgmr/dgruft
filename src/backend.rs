@@ -9,7 +9,10 @@ mod vault;
 // Re-imports.
 pub use account::{Account, UnlockedAccount};
 pub use credential::Credential;
-pub use encryption::encrypted::{Aes256Key, Aes256Nonce, Encrypted};
+pub use encryption::{
+    encrypted::{Aes256Key, Aes256Nonce, Encrypted},
+    traits::{TryFromEncrypted, TryIntoEncrypted},
+};
 pub use file_data::FileData;
 pub use hashing::hashed::{Hash, Hashed, Salt};
 pub use vault::Vault;
