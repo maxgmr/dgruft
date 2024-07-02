@@ -1,307 +1,195 @@
 //! Functionality for individual dgruft user accounts.
-use crate::backend::{encrypted, encrypted::Encrypted, hashed::Hashed};
-use crate::error::Error;
-use crate::helpers;
+use color_eyre::eyre::{self, eyre};
 
-/// An account with a username, password, and encryption key.
-#[derive(Debug)]
+use super::{
+    encryption::encrypted::{
+        new_rand_key, Aes256Key, Encrypted, TryFromEncrypted, TryIntoEncrypted,
+    },
+    hashing::hashed::{Hashed, IntoHashed, Salt},
+};
+
+/// A `dgruft` account with a username, password, and encryption key. Each `dgruft` user has an
+/// account. The account's `password` serves as the primary authenticator.
+///
+/// ### Role of the `password`
+///
+/// - The `password`, when [Hashed] a single time through PBKDF2, serves as the [Aes256Key] for
+///     this account's `key`, the [Aes256Key] used to encrypt and decrypt all [Credential],
+///     [FileData], and [FileData] contents owned by this account.
+///
+/// - The double-[Hashed] `password` is stored in the `dgruft` database. When logging in, the
+///     user's entered password is compared against this one to verify that the correct password was
+///     entered.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Account {
     username: String,
-    password_salt: [u8; 64],
-    dbl_hashed_password: Hashed,
+    password_salt: Salt<64>,
+    dbl_hashed_password: Hashed<32, 64>,
     encrypted_key: Encrypted,
 }
 impl Account {
     /// Create a new [Account] from a username and a password.
-    pub fn new(username: &str, password: &str) -> Result<Self, Error> {
-        // Generate a random AES-256 encryption key
-        let key = encrypted::new_key(None);
-        // Hash the password
-        let hashed_password = Hashed::new(password.as_bytes());
-        // Use the hashed password as the key to encrypt the encryption key
-        let encrypted_key = Encrypted::new(&key, hashed_password.hash())?;
-        // Hash the password again to store it
-        let dbl_hashed_password = Hashed::new(hashed_password.hash());
+    pub fn new(username: &str, password: &str) -> eyre::Result<Self> {
+        // Generate a random [Aes256Key]. This key is used to encrypt and decrypt all this
+        // account's data. It never changes, even when the password is changed.
+        let key: Aes256Key = new_rand_key();
+
+        // Hash the password once. This [Hashed] password is used as the [Aes256Key] to encrypt and
+        // decrypt this account's `key`.
+        let hashed_password = password.into_hashed_rand_salt();
+
+        // Use the hashed password as the key to encrypt the encryption key.
+        let encrypted_key = key.try_encrypt_with_key(*hashed_password.hash())?;
+
+        // Hash the hashed password to store it.
+        let dbl_hashed_password = hashed_password.hash().into_hashed_rand_salt();
+
         Ok(Self {
-            username: username.to_string(),
+            username: username.to_owned(),
             password_salt: *hashed_password.salt(),
             dbl_hashed_password,
             encrypted_key,
         })
     }
 
-    /// Load an [Account] from a [Base64Account]— a set of base-64-encoded strings.
-    pub fn from_b64(b64_account: Base64Account) -> Result<Self, Error> {
-        let username = helpers::bytes_to_utf8(
-            &helpers::b64_to_bytes(&b64_account.b64_username)?,
-            "username",
-        )?;
-        let password_salt: [u8; 64] =
-            helpers::b64_to_fixed(b64_account.b64_password_salt, "b64_password_salt")?;
-        let dbl_hashed_password = Hashed::from_b64(
-            &b64_account.b64_dbl_hashed_password_hash,
-            &b64_account.b64_dbl_hashed_password_salt,
-        )?;
-        let encrypted_key = Encrypted::from_b64(
-            &b64_account.b64_encrypted_key_ciphertext,
-            &b64_account.b64_encrypted_key_nonce,
-        )?;
-
-        Ok(Self {
+    /// Create an [Account] from its fields.
+    pub fn from_fields(
+        username: String,
+        password_salt: Salt<64>,
+        dbl_hashed_password: Hashed<32, 64>,
+        encrypted_key: Encrypted,
+    ) -> Self {
+        Self {
             username,
             password_salt,
             dbl_hashed_password,
             encrypted_key,
+        }
+    }
+
+    /// Unlock this [Account] into an [UnlockedAccount] using its password.
+    pub fn unlock(&self, password: &str) -> eyre::Result<UnlockedAccount> {
+        let hashed_password = password.into_hashed_with_salt(self.password_salt);
+        let dbl_hashed_password = hashed_password
+            .hash()
+            .into_hashed_with_salt(*self.dbl_hashed_password.salt());
+
+        // Ensure passwords match
+        if dbl_hashed_password.hash() != self.dbl_hashed_password.hash() {
+            return Err(eyre!("Incorrect password."));
+        }
+
+        // Password OK. Get encryption key.
+        let key = Aes256Key::try_decrypt(&self.encrypted_key, *hashed_password.hash())?;
+
+        Ok(UnlockedAccount {
+            username: self.username.to_owned(),
+            password: password.to_owned(),
+            hashed_password,
+            dbl_hashed_password,
+            key,
+            encrypted_key: self.encrypted_key.clone(),
         })
     }
 
-    /// Convert this [Account] to a [Base64Account] for storage.
-    pub fn to_b64(&self) -> Base64Account {
-        Base64Account {
-            b64_username: helpers::bytes_to_b64(self.username().as_bytes()),
-            b64_password_salt: helpers::bytes_to_b64(self.password_salt()),
-            b64_dbl_hashed_password_hash: self.dbl_hashed_password().hash_as_b64(),
-            b64_dbl_hashed_password_salt: self.dbl_hashed_password().salt_as_b64(),
-            b64_encrypted_key_ciphertext: self.encrypted_key().ciphertext_as_b64(),
-            b64_encrypted_key_nonce: self.encrypted_key().nonce_as_b64(),
-        }
-    }
-
-    /// Return true iff the entered password matches the password stored in this [Account].
-    pub fn check_password_match(&self, password: &str) -> bool {
-        let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
-        let dbl_hashed_password =
-            Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
-        self.dbl_hashed_password.hash() == dbl_hashed_password.hash()
-    }
-
-    // GETTERS
-
-    /// Return the username of this [Account].
+    /// Get the `username` of this [Account].
     pub fn username(&self) -> &str {
         &self.username
     }
 
-    /// Return the password salt of this [Account].
-    pub fn password_salt(&self) -> &[u8; 64] {
+    /// Get the `password_salt` of this [Account].
+    pub fn password_salt(&self) -> &Salt<64> {
         &self.password_salt
     }
 
-    /// Return the double-hashed password of this [Account].
-    pub fn dbl_hashed_password(&self) -> &Hashed {
+    /// Get the `dbl_hashed_password` of this [Account].
+    pub fn dbl_hashed_password(&self) -> &Hashed<32, 64> {
         &self.dbl_hashed_password
     }
 
-    /// Return the encrypted key of this [Account].
+    /// Get the `encrypted_key` of this [Account].
     pub fn encrypted_key(&self) -> &Encrypted {
         &self.encrypted_key
     }
-
-    /// Get all fields of this [Account], including the secure ones. Use with caution and
-    /// restraint!
-    pub fn unlock(&self, password: &str) -> Result<SecureFields, Error> {
-        let hashed_password = Hashed::from_salt(password.as_bytes(), self.password_salt());
-        let dbl_hashed_password =
-            Hashed::from_salt(hashed_password.hash(), self.dbl_hashed_password.salt());
-
-        // Check if password matches
-        if dbl_hashed_password.hash() != self.dbl_hashed_password.hash() {
-            Err(Error::IncorrectPasswordError)
-        } else {
-            // Password OK, continue collecting fields
-            let key: [u8; 32] = self
-                .encrypted_key()
-                .decrypt(hashed_password.hash())?
-                .try_into()
-                .unwrap();
-
-            Ok(SecureFields {
-                username: self.username().to_owned(),
-                password: password.to_owned(),
-                hashed_password,
-                dbl_hashed_password,
-                key,
-                encrypted_key: self.encrypted_key().clone(),
-            })
-        }
-    }
 }
 
-/// All the fields of an [Account], including the ones only accessible by password. Use with
-/// caution and restraint.
-#[derive(Debug)]
-pub struct SecureFields {
+/// An [Account] with all its fields accessible. This data should *never* be written to the disk or
+/// recorded in any other way!
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UnlockedAccount {
     username: String,
     password: String,
-    hashed_password: Hashed,
-    dbl_hashed_password: Hashed,
-    key: [u8; 32],
+    hashed_password: Hashed<32, 64>,
+    dbl_hashed_password: Hashed<32, 64>,
+    key: Aes256Key,
     encrypted_key: Encrypted,
 }
-impl SecureFields {
-    /// Return the username of this [SecureFields].
+impl UnlockedAccount {
+    /// Change the `password` of this [UnlockedAccount].
+    ///
+    /// The encryption key itself remains unchanged.
+    pub fn change_password(&mut self, new_password: &str) -> eyre::Result<()> {
+        let new_hashed_password = new_password.into_hashed_rand_salt();
+        let new_encrypted_key = self.key.try_encrypt_with_key(*new_hashed_password.hash())?;
+        let new_dbl_hashed_password = new_hashed_password.hash().into_hashed_rand_salt();
+
+        self.hashed_password = new_hashed_password;
+        self.encrypted_key = new_encrypted_key;
+        self.dbl_hashed_password = new_dbl_hashed_password;
+
+        Ok(())
+    }
+
+    /// Return the `username` of this [UnlockedAccount].
     pub fn username(&self) -> &str {
         &self.username
     }
-    /// Return the password of this [SecureFields].
+
+    /// Return the `password` of this [UnlockedAccount].
     pub fn password(&self) -> &str {
         &self.password
     }
-    /// Return the hashed_password of this [SecureFields].
-    pub fn hashed_password(&self) -> &Hashed {
+
+    /// Return the `hashed_password` of this [UnlockedAccount].
+    pub fn hashed_password(&self) -> &Hashed<32, 64> {
         &self.hashed_password
     }
-    /// Return the dbl_hashed_password of this [SecureFields].
-    pub fn dbl_hashed_password(&self) -> &Hashed {
+
+    /// Return the `dbl_hashed_password` of this [UnlockedAccount].
+    pub fn dbl_hashed_password(&self) -> &Hashed<32, 64> {
         &self.dbl_hashed_password
     }
-    /// Return the key of this [SecureFields].
-    pub fn key(&self) -> &[u8; 32] {
-        &self.key
+
+    /// Return the `key` of this [UnlockedAccount].
+    pub fn key(&self) -> Aes256Key {
+        self.key
     }
-    /// Return the encrypted_key of this [SecureFields].
+
+    /// Return the `encrypted_key` of this [UnlockedAccount].
     pub fn encrypted_key(&self) -> &Encrypted {
         &self.encrypted_key
-    }
-}
-
-/// An [Account] converted for base-64 storage.
-#[derive(Debug)]
-pub struct Base64Account {
-    /// Account username in base-64 format.
-    pub b64_username: String,
-    /// Account password salt in base-64 format.
-    pub b64_password_salt: String,
-    /// Account double-hashed password hash in base-64 format.
-    pub b64_dbl_hashed_password_hash: String,
-    /// Account double-hashed password salt in base-64 format.
-    pub b64_dbl_hashed_password_salt: String,
-    /// Account encrypted key ciphertext in base-64 format.
-    pub b64_encrypted_key_ciphertext: String,
-    /// Account encrypted key nonce in base-64 format.
-    pub b64_encrypted_key_nonce: String,
-}
-impl Base64Account {
-    /// Output fields as tuple.
-    pub fn as_tuple(&self) -> (&str, &str, &str, &str, &str, &str) {
-        (
-            &self.b64_username,
-            &self.b64_password_salt,
-            &self.b64_dbl_hashed_password_hash,
-            &self.b64_dbl_hashed_password_salt,
-            &self.b64_encrypted_key_ciphertext,
-            &self.b64_encrypted_key_nonce,
-        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn test_new_acc() {
-        let my_account = Account::new("my_account", "my_password").unwrap();
-        assert!(my_account.check_password_match("my_password"));
-
-        let incorrect_attempt = my_account.unlock("not my password").unwrap_err();
-        if let Error::IncorrectPasswordError = incorrect_attempt {
-        } else {
-            dbg!(&incorrect_attempt);
-            panic!("Wrong error type");
-        }
-
-        let my_fields = my_account.unlock("my_password").unwrap();
-        let hashed_password = Hashed::from_salt(b"my_password", my_account.password_salt());
-        let dbl_hashed_password = Hashed::from_salt(
-            hashed_password.hash(),
-            my_account.dbl_hashed_password().salt(),
-        );
-        let key: [u8; 32] = my_account
-            .encrypted_key()
-            .decrypt(hashed_password.hash())
-            .unwrap()
-            .try_into()
-            .unwrap();
-        let encrypted_key = Encrypted::from_nonce(
-            &key,
-            hashed_password.hash(),
-            my_fields.encrypted_key().nonce(),
-        )
-        .unwrap();
-        assert_eq!("my_account", my_fields.username());
-        assert_eq!("my_password", my_fields.password());
-        assert_eq!(hashed_password.hash(), my_fields.hashed_password().hash());
-        assert_eq!(hashed_password.salt(), my_fields.hashed_password().salt());
-        assert_eq!(
-            dbl_hashed_password.hash(),
-            my_fields.dbl_hashed_password().hash()
-        );
-        assert_eq!(
-            dbl_hashed_password.salt(),
-            my_fields.dbl_hashed_password().salt()
-        );
-        assert_eq!(&key, my_fields.key());
-        assert_eq!(
-            encrypted_key.ciphertext(),
-            my_fields.encrypted_key().ciphertext()
-        );
-        assert_eq!(encrypted_key.nonce(), my_fields.encrypted_key().nonce());
-    }
+    use super::*;
 
     #[test]
-    fn test_to_from_b64() {
-        let my_account = Account::new("马克斯", "secretpassword123").unwrap();
-        let hashed_password = Hashed::from_salt(b"secretpassword123", my_account.password_salt());
-        let dbl_hashed_password = Hashed::from_salt(
-            hashed_password.hash(),
-            my_account.dbl_hashed_password().salt(),
-        );
-        let key = my_account
-            .encrypted_key()
-            .decrypt(hashed_password.hash())
-            .unwrap();
-        let encrypted_key = Encrypted::from_nonce(
-            &key,
-            hashed_password.hash(),
-            my_account.encrypted_key().nonce(),
-        )
-        .unwrap();
+    fn unlock() {
+        let username = "mr_test";
+        let password = "123";
+        let account = Account::new(username, password).unwrap();
 
-        let my_account_b64 = my_account.to_b64();
-        assert_eq!("6ams5YWL5pav", my_account_b64.b64_username);
-        assert_eq!(
-            dbl_hashed_password.hash_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_hash
-        );
-        assert_eq!(
-            dbl_hashed_password.salt_as_b64(),
-            my_account_b64.b64_dbl_hashed_password_salt
-        );
-        assert_eq!(
-            encrypted_key.ciphertext_as_b64(),
-            my_account_b64.b64_encrypted_key_ciphertext
-        );
-        assert_eq!(
-            encrypted_key.nonce_as_b64(),
-            my_account_b64.b64_encrypted_key_nonce
-        );
+        let _ = account.unlock("1234").unwrap_err();
+        let unlocked = account.unlock("123").unwrap();
+        let unlocked_again = account.unlock("123").unwrap();
 
-        let my_account_2 = Account::from_b64(my_account_b64).unwrap();
-        assert_eq!("马克斯", my_account_2.username());
-        assert_eq!(
-            dbl_hashed_password.hash(),
-            my_account_2.dbl_hashed_password().hash()
-        );
-        assert_eq!(
-            dbl_hashed_password.salt(),
-            my_account_2.dbl_hashed_password().salt()
-        );
-        assert_eq!(
-            encrypted_key.ciphertext(),
-            my_account_2.encrypted_key.ciphertext()
-        );
-        assert_eq!(encrypted_key.nonce(), my_account_2.encrypted_key.nonce());
+        assert_eq!(unlocked.username(), username);
+        assert_eq!(unlocked.password(), password);
+
+        assert_eq!(unlocked, unlocked_again);
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "dgruft"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Max Gilmour"]
 readme = "README.md"
@@ -9,35 +9,36 @@ license-file = "LICENSE"
 
 [dependencies]
 aes-gcm = "0.10"
-base64ct = { version = "1.6", features = ["alloc"] }
+base64ct = { version = "1.6", features = ["alloc", "std"] }
 clap = { version = "4.5", features = [
   "cargo",
   "derive",
   "string",
-  "unstable-styles",
+  # "unstable-styles",
 ] }
+camino = "1.1"
 color-eyre = "0.6"
-crossterm = { version = "0.27", features = ["event-stream"] }
+# crossterm = { version = "0.27", features = ["event-stream"] }
 directories = "5.0"
 edit = "0.1"
 pbkdf2 = "0.12"
 rand_chacha = "0.3"
-ratatui = { version = "0.26", features = ["serde"] }
-regex = "1.10"
+# ratatui = { version = "0.27", features = ["serde"] }
+# regex = "1.10"
 rpassword = "7.3"
 rusqlite = { version = "0.31", features = ["bundled"] }
-serde = { version = "1.0", features = ["derive"] }
+# serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
-tokio = { version = "1.38", features = ["full"] }
-toml = "0.8"
+# tokio = { version = "1.38", features = ["full"] }
+# toml = "0.8"
+uuid = { version = "1.9", features = ["v4"] }
 
 [build-dependencies]
 vergen = { version = "8.3", features = ["build", "cargo", "git", "gitoxide"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4"
-hex-literal = "0.4"
 
 [features]
-default = ["frontend"]
-frontend = []
+default = ["tui"]
+tui = []
