@@ -1,6 +1,5 @@
 //! Parse command-line arguments for the CLI version of `dgruft`.
 use clap::{ArgGroup, Parser, Subcommand};
-use color_eyre::eyre::{self, eyre};
 
 use crate::utils;
 

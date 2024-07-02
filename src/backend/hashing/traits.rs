@@ -22,6 +22,7 @@ use super::{
 /// then return [Hashed::check_match].
 pub trait IntoHashed<const H: usize, const S: usize> {
     /// Hash and salt using a randomly-generated salt.
+    #[allow(dead_code)]
     fn into_hashed_rand_salt(self) -> Hashed<H, S>
     where
         Self: Sized,
@@ -36,6 +37,7 @@ pub trait IntoHashed<const H: usize, const S: usize> {
     fn into_hashed_with_salt(self, salt: Salt<S>) -> Hashed<H, S>;
 
     /// Check whether the given entity, when hashed, matches the given salt.
+    #[allow(dead_code)]
     fn check_match(self, hashed: &Hashed<H, S>) -> bool;
 }
 

@@ -15,6 +15,7 @@ use super::encrypted::*;
 /// [Encrypted::try_encrypt_bytes_key_nonce].
 pub trait TryIntoEncrypted {
     /// Encrypt using a randomly-generated [Aes256Key] and [Aes256Nonce].
+    #[allow(dead_code)]
     fn try_encrypt_new_key(self) -> eyre::Result<(Encrypted, Aes256Key)>
     where
         Self: Sized,

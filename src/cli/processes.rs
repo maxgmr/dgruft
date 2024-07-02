@@ -4,10 +4,7 @@ use std::io::{self, Write};
 use color_eyre::eyre::{self, eyre};
 
 use crate::{
-    backend::{
-        Account, AccountUpdateField, Credential, CredentialUpdateField, FileData,
-        FileDataUpdateField, UnlockedAccount, Vault,
-    },
+    backend::{Account, CredentialUpdateField, FileData, UnlockedAccount, Vault},
     edit::{edit_bytes, edit_string},
     utils::{data_dir, db_path, temp_dir},
 };
@@ -332,7 +329,7 @@ pub fn list_files(username: String) -> eyre::Result<()> {
     // Connect to the vault.
     let vault = vault_connect()?;
     // Login.
-    let unlocked = login(&vault, &username)?;
+    login(&vault, &username)?;
 
     // Load all owned files data.
     let files = vault.load_account_files_data(&username)?;
