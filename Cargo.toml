@@ -20,7 +20,7 @@ camino = "1.1"
 color-eyre = "0.6"
 # crossterm = { version = "0.27", features = ["event-stream"] }
 directories = "5.0"
-# edit = "0.1"
+edit = "0.1"
 pbkdf2 = "0.12"
 rand_chacha = "0.3"
 # ratatui = { version = "0.27", features = ["serde"] }
@@ -31,6 +31,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 sha2 = "0.10"
 # tokio = { version = "1.38", features = ["full"] }
 # toml = "0.8"
+uuid = { version = "1.9", features = ["v4"] }
 
 [build-dependencies]
 vergen = { version = "8.3", features = ["build", "cargo", "git", "gitoxide"] }
