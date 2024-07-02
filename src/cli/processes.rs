@@ -8,7 +8,7 @@ use crate::{
         Account, AccountUpdateField, Credential, CredentialUpdateField, FileData,
         FileDataUpdateField, UnlockedAccount, Vault,
     },
-    edit::edit_string,
+    edit::{edit_bytes, edit_string},
     utils::{data_dir, db_path, temp_dir},
 };
 
@@ -309,7 +309,21 @@ pub fn new_file(username: String, filename: String) -> eyre::Result<()> {
 
 /// Open & edit an existing file.
 pub fn open_file(username: String, filename: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+
+    // Load file.
+    let (_, file_contents): (_, Vec<u8>) = vault.load_file(&username, &filename, unlocked.key())?;
+
+    // Edit file.
+    let edited_file_contents = edit_bytes(temp_dir()?, file_contents)?;
+
+    // Update file.
+    vault.update_file(&username, &filename, unlocked.key(), edited_file_contents)?;
+
+    println!("File \"{}\" updated successfully.", filename);
     Ok(())
 }
 
