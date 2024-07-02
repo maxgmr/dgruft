@@ -91,16 +91,19 @@ pub enum Command {
         group(
             ArgGroup::new("credential")
                 .required(true)
-                .args(&["new", "open", "list", "delete", "force_delete"])
+                .args(&["new", "edit", "view", "list", "delete", "force_delete"])
         )
     )]
     Credentials {
         /// Create a new credential.
         #[clap(short, long, requires = "credentialname")]
         new: bool,
-        /// Open & edit a credential.
+        /// Edit a credential.
         #[clap(short, long, requires = "credentialname")]
-        open: bool,
+        edit: bool,
+        /// View a credential.
+        #[clap(short, long, requires = "credentialname")]
+        view: bool,
         /// List all credentials owned by this account.
         #[clap(short, long)]
         list: bool,
