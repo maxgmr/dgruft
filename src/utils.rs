@@ -11,6 +11,9 @@ use directories::ProjectDirs;
 /// The name of the `dgruft` SQLite database.
 const DB_NAME: &str = "dgruft.db";
 
+/// The name of the temporary directory where edited files are stored.
+const TEMP_DIR_NAME: &str = "temp";
+
 /// String displaying the package version, git info, and build date of `dgruft`.
 const VERSION_MESSAGE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
@@ -54,6 +57,15 @@ pub fn setup() -> eyre::Result<()> {
         File::create_new(db_path()?)?;
     }
 
+    // Create the temp directory. If it already exists, any contents should not be there, so the
+    // directory is deleted then re-created.
+    if fs::metadata(temp_dir()?).is_err() {
+        fs::create_dir(temp_dir()?)?;
+    } else {
+        fs::remove_dir_all(temp_dir()?)?;
+        fs::create_dir(temp_dir()?)?;
+    }
+
     Ok(())
 }
 
@@ -62,6 +74,13 @@ pub fn db_path() -> eyre::Result<Utf8PathBuf> {
     let mut db_path = data_dir()?;
     db_path.push(DB_NAME);
     Ok(db_path)
+}
+
+/// Get the directory where temp files are stored.
+pub fn temp_dir() -> eyre::Result<Utf8PathBuf> {
+    let mut temp_path = data_dir()?;
+    temp_path.push(TEMP_DIR_NAME);
+    Ok(temp_path)
 }
 
 /// Get the directory where `dgruft` program data is stored.
