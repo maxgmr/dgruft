@@ -33,7 +33,8 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
         }
         Command::Credentials {
             new,
-            open,
+            edit,
+            view,
             list,
             delete,
             force_delete,
@@ -41,8 +42,10 @@ pub fn match_args(args: Cli) -> eyre::Result<()> {
         } => {
             if new {
                 new_credential(args.username, credentialname.unwrap())?;
-            } else if open {
-                open_credential(args.username, credentialname.unwrap())?;
+            } else if edit {
+                edit_credential(args.username, credentialname.unwrap())?;
+            } else if view {
+                view_credential(args.username, credentialname.unwrap())?;
             } else if list {
                 list_credentials(args.username)?;
             } else if delete {
