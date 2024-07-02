@@ -4,8 +4,12 @@ use std::io::{self, Write};
 use color_eyre::eyre::{self, eyre};
 
 use crate::{
-    backend::{Account, Credential, FileData, UnlockedAccount, Vault},
-    utils::{data_dir, db_path},
+    backend::{
+        Account, AccountUpdateField, Credential, CredentialUpdateField, FileData,
+        FileDataUpdateField, UnlockedAccount, Vault,
+    },
+    edit::edit_string,
+    utils::{data_dir, db_path, temp_dir},
 };
 
 // ACCOUNTS
@@ -137,13 +141,94 @@ pub fn new_credential(username: String, credentialname: String) -> eyre::Result<
 
 /// Edit an existing credential.
 pub fn edit_credential(username: String, credentialname: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let mut vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+    let key = unlocked.key();
+
+    // Load the credential & its fields.
+    let credential = vault.load_credential(&username, &credentialname, key)?;
+    let mut credential_username: String = credential.username(key)?;
+    let mut credential_password: String = credential.password(key)?;
+    let mut credential_notes: String = credential.notes(key)?;
+
+    // Prompt to edit each credential field.
+    if cli_confirm(
+        format!(
+            "Username: \"{}\"\nEdit username? [Y/n] ",
+            credential_username
+        ),
+        true,
+    )? {
+        credential_username = edit_string(temp_dir()?, credential_username)?;
+    }
+    vault.update_credential(
+        &username,
+        &credentialname,
+        key,
+        CredentialUpdateField::UsernameCipherbytes,
+        CredentialUpdateField::UsernameNonce,
+        &credential_username,
+    )?;
+
+    if cli_confirm(
+        format!(
+            "Password: \"{}\"\nEdit password? [Y/n] ",
+            credential_password
+        ),
+        true,
+    )? {
+        credential_password = edit_string(temp_dir()?, credential_password)?;
+    }
+    vault.update_credential(
+        &username,
+        &credentialname,
+        key,
+        CredentialUpdateField::PasswordCipherbytes,
+        CredentialUpdateField::PasswordNonce,
+        &credential_password,
+    )?;
+
+    if cli_confirm(
+        format!("Notes: \"{}\"\nEdit notes? [Y/n] ", credential_notes),
+        true,
+    )? {
+        credential_notes = edit_string(temp_dir()?, credential_notes)?;
+    }
+    vault.update_credential(
+        &username,
+        &credentialname,
+        key,
+        CredentialUpdateField::NotesCipherbytes,
+        CredentialUpdateField::NotesNonce,
+        &credential_notes,
+    )?;
+
+    println!("Credential \"{}\" edited successfully.", credentialname);
     Ok(())
 }
 
 /// View an existing credential.
 pub fn view_credential(username: String, credentialname: String) -> eyre::Result<()> {
-    // TODO
+    // Connect to the vault.
+    let vault = vault_connect()?;
+    // Login.
+    let unlocked = login(&vault, &username)?;
+    let key = unlocked.key();
+
+    // Load the credential & its fields.
+    let credential = vault.load_credential(&username, &credentialname, key)?;
+    let credential_username: String = credential.username(key)?;
+    let credential_password: String = credential.password(key)?;
+    let credential_notes: String = credential.notes(key)?;
+
+    // Output credential
+    println!(
+        "Credential \"{}\"\nUsername: {}Password: {}Notes:{}",
+        credentialname, credential_username, credential_password, credential_notes
+    );
+
     Ok(())
 }
 
@@ -322,8 +407,8 @@ fn cli_confirm(message: String, default: bool) -> eyre::Result<bool> {
     let input = cli_prompt(message)?;
     if default {
         match input.to_lowercase().chars().next() {
-            Some('n') => Ok(true),
-            _ => Ok(false),
+            Some('n') => Ok(false),
+            _ => Ok(true),
         }
     } else {
         match input.to_lowercase().chars().next() {

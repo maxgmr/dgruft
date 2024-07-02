@@ -15,4 +15,7 @@ pub use encryption::{
 };
 pub use file_data::FileData;
 pub use hashing::hashed::{Hash, Hashed, Salt};
-pub use vault::Vault;
+pub use vault::{
+    database_traits::{AccountUpdateField, CredentialUpdateField, FileDataUpdateField},
+    Vault,
+};

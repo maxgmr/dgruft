@@ -5,7 +5,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{self, eyre};
 
 mod database;
-mod database_traits;
+pub mod database_traits;
 mod filesystem;
 mod sql_schemas;
 mod sql_statements;
