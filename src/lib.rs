@@ -6,6 +6,7 @@
 
 mod backend;
 pub mod cli;
+mod edit;
 pub mod input_validation;
 #[cfg(feature = "tui")]
 mod tui;
