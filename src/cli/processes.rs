@@ -135,8 +135,14 @@ pub fn new_credential(username: String, credentialname: String) -> eyre::Result<
     Ok(())
 }
 
-/// Open & edit an existing credential.
-pub fn open_credential(username: String, credentialname: String) -> eyre::Result<()> {
+/// Edit an existing credential.
+pub fn edit_credential(username: String, credentialname: String) -> eyre::Result<()> {
+    // TODO
+    Ok(())
+}
+
+/// View an existing credential.
+pub fn view_credential(username: String, credentialname: String) -> eyre::Result<()> {
     // TODO
     Ok(())
 }
