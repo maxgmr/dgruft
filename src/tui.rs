@@ -2,4 +2,6 @@
 
 mod app;
 pub mod args;
+mod components;
+mod mode;
 mod ti;
