@@ -6,10 +6,11 @@
 
 mod backend;
 pub mod cli;
+pub mod config;
 mod edit;
 pub mod input_validation;
 #[cfg(feature = "tui")]
-mod tui;
+pub mod tui;
 pub mod utils;
 
 // Re-exports
